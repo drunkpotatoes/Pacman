@@ -24,12 +24,14 @@ int print_board(int row, int col, int** board)
 	return 0;
 }
 
-int** init_board()
+board_info init_board()
 {
 	FILE* fid;
 	int row, col;
 	int i, j, c;
 	int ** board;
+
+	board_info bi;
 
 
 	if (  (fid = fopen(BOARD_FILE, "r") ) == NULL)
@@ -70,6 +72,33 @@ int** init_board()
 
 	print_board(row, col, board);
 
-	return board;
 
+	bi.board = board;
+	bi.row = row;
+	bi.col = col;
+
+	bi.empty = empty_spaces(row,col,board);
+
+
+	return bi;
+
+}
+
+
+int empty_spaces(int row, int col, int** board)
+{
+	int i,j;
+	int empty = 0;
+
+	for (i = 0; i<row; i++)
+	{
+		for(j=0; j<col;j++)
+		{
+			
+			if (board[i][j] == EMPTY) empty++;
+		}
+	}
+
+
+	return empty;
 }

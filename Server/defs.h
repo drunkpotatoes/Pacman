@@ -3,4 +3,8 @@
 #define BRICK 'B'
 #define EMPTY ' '
 
+#define SERVER_PORT "60000"
+
+#define BUFF_SIZE 100
+
 #define BOARD_FILE "board.txt"

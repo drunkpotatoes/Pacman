@@ -1,5 +1,8 @@
 #include "defs.h"
 #include "board.h"
 #include "utils.h"
+#include "sockets.h"
 
-void mem_err (char * variable);
+void * client_thread(void*);
+void * accept_thread (void*);
+int    client_setup(int);

@@ -27,7 +27,7 @@
  *
  ******************************************************************************/
 
-int client_connect(struct addrinfo **res, char *ip, char *port)
+int client_connect(struct addrinfo **res, char *ip, char* port)
 {
     int fd,n;
     struct addrinfo hints;
@@ -36,11 +36,13 @@ int client_connect(struct addrinfo **res, char *ip, char *port)
     hints.ai_socktype=SOCK_STREAM;
     hints.ai_flags=AI_NUMERICHOST|AI_NUMERICSERV;
     
+
+
     /*gets server address info*/
     n = getaddrinfo(ip,port,&hints,res);
     if(n!=0)
     {
-        fprintf(stderr,"ERROR: getaddrinfo: %s\n",gai_strerror(n));
+        fprintf(stderr,"\nERROR: getaddrinfo: %s\n",gai_strerror(n));
         return -1;
     }
 
@@ -48,7 +50,7 @@ int client_connect(struct addrinfo **res, char *ip, char *port)
     fd=socket((*res)->ai_family,(*res)->ai_socktype,(*res)->ai_protocol);
     if(fd==-1)
     {
-        printf("ERROR: socket\n");
+        fprintf(stderr,"\nERROR: socket\n");
         return -1;
     }
 
@@ -56,7 +58,7 @@ int client_connect(struct addrinfo **res, char *ip, char *port)
     n=connect(fd,(*res)->ai_addr,(*res)->ai_addrlen);
     if(n==-1)
     {
-        printf("ERROR: connect\n");
+        fprintf(stderr,"\nERROR: connect\n");
         return -1;
     }
 
@@ -112,7 +114,7 @@ int server_open(struct addrinfo **res,char* port)
         return -1;
     }
     
-    /*waits for connection*/
+    /*marks socket as passive for accepting connections*/
     n = listen(fd,5)==-1;
     if(n == -1)
     {
