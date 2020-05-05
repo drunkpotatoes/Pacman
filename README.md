@@ -4,7 +4,9 @@
 
 ### Client-Server SETUP:
 
-Client: RQ - Request Connection
+Client Request a Connection.
+
+Client: RQ 
 
 If the server is full it sends a welcome message, otherwise, sends a wait message. Client will wait 10 seconds and re-attempt connection.
 
