@@ -16,14 +16,16 @@ After receiving the welcome from the server, the client will send his colour inf
 
 Client: CC [R,G,B] [R,G,B]
 
-Server will them send a message mapping the board containing the number of pieces the clients needs to add to his board.
+Server will them send a message mapping the board containing the number of rows and columns of the board.
 
-Server: MP  [ROW]:[COL] [NUMBER_PIECES] 
+Server: MP  [ROW]:[COL] 
 
 Server: PT  [PIECE]@[Y]:[X] [R,G,B]           
 
-Server repeates PT until it lets the client know all pieces (NUMBER_PIECES) that need to be placed.
-If the client doesn't receive all the pieces promised in the MP command it disconnects, otherwise sends okay message.
+Server repeates PT until it has sent all the non-empty pieces. After sending all the pieces, it will send a summary message containing the number of pieces sent.
+The client will see this message and confirm if it received all of  the pieces or not, if not, disconnects.
+
+Server: SS [NUM_PIECES]
 
 Client: OK 
 
