@@ -28,7 +28,11 @@ void * client_thread (void* arg)
 	int  fd;
 	fd = *((int*) arg);
 
-	if (client_setup(fd) == -1) 		return NULL;
+	if (client_setup(fd) == -1)
+	{
+		close(fd);
+		return NULL;
+	}
 
 
 	close(fd);
@@ -127,7 +131,7 @@ int main(int argc, char** argv)
 int client_setup(int fd)
 {	
 
-	int n, num_pieces;
+	int n,i,j,num_pieces;
 	
 	char buffer[BUFF_SIZE];
 
@@ -158,9 +162,6 @@ int client_setup(int fd)
 
 		send(fd,buffer,BUFF_SIZE,0);
 
-		/* closes connection*/
-		close(fd);
-
 		return -1;
 	}
 
@@ -168,20 +169,41 @@ int client_setup(int fd)
 
 	/* non empty pieces */
 
-
 	num_pieces = status.row*status.col - status.empty;
 
 	n = sprintf(buffer, "MP %d:%d %d\n", status.row, status.col, num_pieces);
 	buffer[n] = '\0';
 	send(fd,buffer,BUFF_SIZE,0);
 
-	/* TO DO : send all pieces ;; NEED: place to save other user's colours and how to distinguish users
-	n = sprintf(buffer, "PT %d:%d %d")
-	for (i = 0; i < num_pieces; i++)
+	/*sends all piece information to the client*/
+	
+	for (i = 0; i < status.row; i++)
 	{
+		for (j = 0 ; j < status.col; j++)
+		{
+			if(status.board[i][j].piece == EMPTY) continue;
 
+			n = sprintf(buffer, "PT %d@%d:%d %d,%d,%d\n", status.board[i][j].piece,i,j,status.board[i][j].r, status.board[i][j].g, status.board[i][j].b);
+			buffer[n] = '\0';
+			send(fd,buffer,BUFF_SIZE, 0);
+			printf("%s\n",buffer);
+		}
 	}
-	*/
+
+
+	n = recv(fd, buffer,BUFF_SIZE,0);
+
+	/* cleans buffer */
+	buffer[n] = '\0';
+
+
+	/* prints message */
+	printf("%s\n", buffer);
+
+	/* connection request*/	
+	if(strstr(buffer, "OK") == NULL) 	return -1;
+
+
 	return 0;
 
 }

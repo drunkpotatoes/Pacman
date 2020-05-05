@@ -5,7 +5,7 @@
 
 #include "board.h"
 
-int print_board(int row, int col, int** board)
+int print_board(int row, int col, board_piece** board)
 {
 	int i, j;
 
@@ -15,7 +15,7 @@ int print_board(int row, int col, int** board)
 		for(j=0; j<col;j++)
 		{
 			
-			printf("%c",board[i][j]);
+			printf("%c",board[i][j].piece);
 		}
 
 		printf("\n");
@@ -29,7 +29,7 @@ board_info init_board()
 	FILE* fid;
 	int row, col;
 	int i, j, c;
-	int ** board;
+	board_piece ** board;
 
 	board_info bi;
 
@@ -49,12 +49,12 @@ board_info init_board()
 	}
 
 	
-	if ( (board = (int**) malloc (row*sizeof(int*))  ) == NULL )					mem_err("board");
+	if ( (board = (board_piece**) malloc (row*sizeof(board_piece*))  ) == NULL )					mem_err("board");
 
 	for(i = 0 ; i < row ; i++)
 	{
 
-		if ( ( board[i] = (int*) malloc (col*sizeof(int))  ) == NULL )				mem_err("board");
+		if ( ( board[i] = (board_piece*) malloc (col*sizeof(board_piece))  ) == NULL )				mem_err("board");
 	
 
 		for (j = 0; j < col ; j++)
@@ -66,7 +66,11 @@ board_info init_board()
 			{
 				c = fgetc(fid);
 			}
-			board[i][j] = c;
+			board[i][j].piece = c;
+			board[i][j].r = 0;
+			board[i][j].g = 0;
+			board[i][j].b = 0;
+
 		}
 	}
 
@@ -85,7 +89,7 @@ board_info init_board()
 }
 
 
-int empty_spaces(int row, int col, int** board)
+int empty_spaces(int row, int col, board_piece** board)
 {
 	int i,j;
 	int empty = 0;
@@ -95,7 +99,7 @@ int empty_spaces(int row, int col, int** board)
 		for(j=0; j<col;j++)
 		{
 			
-			if (board[i][j] == EMPTY) empty++;
+			if (board[i][j].piece == EMPTY) empty++;
 		}
 	}
 
