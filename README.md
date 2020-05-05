@@ -36,11 +36,13 @@ Client: DC
 
 ### Client-Server LOOP:
 
-The game loop consists of the server telling the clients eitheir to clear or to put pieces.
+The game loop consists of the server telling the clients eitheir to clear or to put pieces. And for the client to ask the server to move pieces.
 
 Server: PT [PIECE]@[Y]:[X] [R,G,B]   
 
 Server: CL [Y]:[X]
+
+Client: MV [PIECE]@[PREV-Y]:[PREV-X] => [Y]:[X]
 
 At any time the server or the client can disconnet sending the respective message.
 
