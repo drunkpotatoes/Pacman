@@ -19,11 +19,22 @@
 
 #include "client.h"
 
+
+int RGB_PAC[3];
+int RGB_MON[3];
 int main(int argc, char** argv)
 {
 
-	server_setup();
 	
+	RGB_PAC[0] = 255;
+	RGB_PAC[1] = 0;
+	RGB_PAC[2] = 0;
+
+	RGB_MON[0] = 0;
+	RGB_MON[1] = 0;
+	RGB_MON[2] = 255;
+
+	server_setup();
 
 	getchar();
 
@@ -33,7 +44,7 @@ int main(int argc, char** argv)
 
 int server_setup()
 {
-	int fd,n,i,row,col,nr_empty,x,y,r,g,b,piece;
+	int fd,n,row,col,nr_pieces,x,y,r,g,b,piece,nr;
 	struct addrinfo **res;
 	char buffer[100];
 
@@ -68,10 +79,19 @@ int server_setup()
 
 		buffer[n] = '\0';
 
+		nr_pieces = 0;
 
 		/* server welcome */
 		if(strstr(buffer,"WE") != NULL)
 		{	
+
+			n = sprintf(buffer, "CC %d,%d,%d %d,%d,%d\n", RGB_PAC[0], RGB_PAC[1], RGB_PAC[2], RGB_MON[0], RGB_MON[1], RGB_MON[2]);
+
+			buffer[n] = '\0';
+
+			/* sends colour selection to server */
+			send(fd, buffer,BUFF_SIZE,0);
+
 
 			/* waits for map layout */
 			n = recv(fd, buffer, BUFF_SIZE, 0);
@@ -79,31 +99,42 @@ int server_setup()
 
 			if(strstr(buffer,"MP") == NULL)  return -1;
  		
-			sscanf(buffer, "%*s %d:%d %d\n", &row, &col, &nr_empty);
+			sscanf(buffer, "%*s %d:%d\n", &row, &col);
 
 			/* print board of size row x col */
 			create_board_window(row, col);
 
-			for (i = 0; i < nr_empty; i++)
+			while(1)
 			{
 				n = recv(fd, buffer, BUFF_SIZE, 0);
 				buffer[n] = '\0';
 				printf("%s\n", buffer);
 
 
+				/* if receives summary message terminates */
+				if (strstr(buffer, "SS") != NULL ) 		break;
+
+
 				/* not expected message, disconnects*/
-				if (strstr(buffer, "PT") == NULL) 
+				if ( (strstr(buffer, "PT") == NULL)  )
 				{
 					n = sprintf(buffer, "DC");
 					buffer[n] = '\0';
 					send(fd,buffer,BUFF_SIZE,0);
+					printf("%s\n", buffer);
 
 					return -1;
 				}
 
+
+				
+
+				nr_pieces++;
+
 				sscanf(buffer, "%*s %d@%d:%d %d,%d,%d", &piece,&y,&x,&r,&g,&b);
 
-				if(piece == BRICK)						paint_brick(x,y);
+
+				if     (piece == BRICK)					paint_brick(x,y);
 
 				else if(piece == PACMAN)				paint_pacman(x,y,r,g,b);
 			
@@ -111,6 +142,7 @@ int server_setup()
 
 				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);
 		
+
 				else /* not expected piece */
 				{
 					/* disonnects */
@@ -120,6 +152,20 @@ int server_setup()
 
 					return -1;
 				}
+
+			}
+
+
+			/* gets number of messages sent */
+			sscanf(buffer, "%*s %d",&nr);
+
+			if(nr_pieces == nr)
+			{
+				/* all good*/
+				n = sprintf(buffer, "OK");
+				buffer[n] = '\0';
+				send(fd,buffer,BUFF_SIZE,0);
+				printf("%s\n", buffer);
 
 			}
 
