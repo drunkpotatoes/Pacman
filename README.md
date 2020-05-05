@@ -9,6 +9,7 @@ Client: RQ - Request Connection
 If the server is full it sends a welcome message, otherwise, sends a wait message. Client will wait 10 seconds and re-attempt connection.
 
 Server: WE - Welcome
+
 Server: W8 - Wait
 
 Server will them send a message mapping the board containing the number of pieces the clients needs to add to his board.
