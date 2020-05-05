@@ -1,4 +1,5 @@
-#define PACMAN 'P'
+#define PACMAN 'p'
+#define POWER_PACMAN 'P'
 #define MONSTER 'M'
 #define BRICK 'B'
 #define EMPTY ' '
