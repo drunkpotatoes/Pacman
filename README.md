@@ -12,6 +12,10 @@ Server: WE - Welcome
 
 Server: W8 - Wait
 
+After receiving the welcome from the server, the client will send his colour information for the pacman and monster. The pacman RGB code will come first and the monster right after.
+
+Client: CL R,G,B R,G,B
+
 Server will them send a message mapping the board containing the number of pieces the clients needs to add to his board.
 
 Server: MP  ROW:COL NUMBER_PIECES 
