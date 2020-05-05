@@ -2,6 +2,7 @@
 #include "board.h"
 #include "utils.h"
 #include "sockets.h"
+#include "clients.h"
 
 void * client_thread(void*);
 void * accept_thread (void*);
