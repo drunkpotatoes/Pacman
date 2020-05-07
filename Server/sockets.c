@@ -62,6 +62,9 @@ int client_connect(struct addrinfo **res, char *ip, char* port)
         return -1;
     }
 
+    freeaddrinfo(*res);
+    res=NULL;
+
     return fd;
 }
 
@@ -121,6 +124,7 @@ int server_open(struct addrinfo **res,char* port)
         printf("ERROR: listen\n");
         return -1;
     }
+
 
     return fd;
 }

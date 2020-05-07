@@ -28,7 +28,7 @@ void add_client(client** client_list, unsigned long id, int* pac, int *mon)
 	if (*client_list == NULL)
 	{	
 
-		new_cli = (client *) malloc(sizeof(client));
+		if ((new_cli = (client *) malloc(sizeof(client)) ) == NULL) 	mem_err("Client Struct");
 
 		new_cli->user_id = id;
 		new_cli->p_r = pac[0];
@@ -59,7 +59,7 @@ void add_client(client** client_list, unsigned long id, int* pac, int *mon)
 
 
 		/* allocates position for new client*/
-		new_cli = (client*) malloc(sizeof(client));
+		if ( ( new_cli = (client*) malloc(sizeof(client)) ) == NULL) 	mem_err("Client Struct");
 
 		new_cli->user_id = id;
 		new_cli->p_r = pac[0];
@@ -104,4 +104,77 @@ void print_clients(client * head)
         
         aux = aux->next;
     }
+}
+
+
+client * search_client (client* head, unsigned long id)
+{
+	if(head == NULL)
+	{
+		return NULL;
+	}
+	client* aux;
+
+	aux = head;
+  
+
+    while (aux != NULL) 
+    {
+        if (aux->user_id == id)
+        {
+        	return aux;
+        }
+        
+        aux = aux->next;
+    }
+
+    return NULL;
+}
+
+
+void remove_client(client * head, unsigned long id)
+{
+		if(head == NULL)
+	{
+		return;
+	}
+	client* aux;
+	client* prev;
+
+	aux = head;                    
+  
+
+    while (aux != NULL) 
+    {
+        if (aux->user_id == id)
+        {
+        	return;
+        }
+        
+        prev = aux;
+        aux = aux->next;
+    }
+
+    prev->next = aux->next;
+
+    free(aux);
+
+    return;
+}
+
+
+void free_clients(client* head)
+
+{
+	client* aux;
+
+
+	while(head != NULL)
+	{
+		aux = head;
+		head = head->next;
+		free(aux);
+	}
+
+	return;
 }

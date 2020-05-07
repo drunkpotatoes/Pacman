@@ -7,3 +7,5 @@
 void * client_thread(void*);
 void * accept_thread (void*);
 int    client_setup(int);
+
+void write_play_to_main();

@@ -106,3 +106,87 @@ int empty_spaces(int row, int col, board_piece** board)
 
 	return empty;
 }
+
+char* print_piece(board_piece ** board, int row, int col, char* buffer)
+{
+	int n;
+
+	n = sprintf(buffer, "%d @ %d:%d [%d,%d,%d]", board[row][col].piece ,row ,col ,board[row][col].r, board[row][col].g, board[row][col].b);
+	
+	buffer[n] = '\0';
+
+	return buffer;
+}
+
+
+void place_piece(board_piece ** board, int piece, int row, int col, unsigned long id, int r, int g, int b)
+{
+
+
+	/* needs write protection*/
+	board[row][col].piece = piece;
+	board[row][col].user_id = id;
+	board[row][col].r = r;
+	board[row][col].g = g;
+	board[row][col].b = b;
+
+	return;
+}
+
+
+
+void free_board(int row, board_piece** board)
+{
+	int i;
+
+	for (i = 0; i < row; i++)
+	{
+		free(board[i]);
+	}
+
+	free(board);
+
+	return;
+}
+
+
+int is_empty(int row, int col, board_piece** board)
+{
+	if(board[row][col].piece == EMPTY)
+		return 1;
+	else
+		return 0;
+}
+
+int is_pacman(int row, int col, board_piece** board)
+{
+	if(board[row][col].piece == PACMAN)
+		return 1;
+	else
+		return 0;
+}
+
+int is_monster(int row, int col, board_piece** board)
+{
+	if(board[row][col].piece == MONSTER)
+		return 1;
+	else
+		return 0;
+}
+
+int is_brick(int row, int col, board_piece** board)
+{
+	if(board[row][col].piece == BRICK)
+		return 1;
+	else
+		return 0;
+}
+
+int piece_is_correct(int row, int col, int piece, unsigned long  id, board_piece** board)
+{
+	if ( (board[row][col].piece == piece) && (board[row][col].user_id == id) )
+		return 1;
+	else
+		return 0;
+}
+
