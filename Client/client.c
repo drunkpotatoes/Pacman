@@ -84,7 +84,7 @@ int server_setup()
     tv.tv_sec =2;
     tv.tv_usec = 0;
 
-	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 	mem_err("Address Information");
+	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 	mem_err("Addrinfo Information");
 
 	while (1)
 	{
