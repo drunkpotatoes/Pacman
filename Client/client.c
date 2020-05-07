@@ -25,6 +25,9 @@ int RGB_MON[3];
 int main(int argc, char** argv)
 {
 
+	int fd, n;
+
+	char buffer[BUFF_SIZE];
 	
 	RGB_PAC[0] = 255;
 	RGB_PAC[1] = 0;
@@ -34,8 +37,31 @@ int main(int argc, char** argv)
 	RGB_MON[1] = 0;
 	RGB_MON[2] = 255;
 
-	server_setup();
+	
 
+	/* sets up server connetion)*/
+	if ( (fd = server_setup() ) == -1) 	
+		{
+			n = sprintf(buffer, "DC");
+			buffer[n] = '\0';
+
+			if (send(fd,buffer,BUFF_SIZE,0) == -1) 	{func_err("send"); return -1;}
+				
+			printf("%s\n", buffer);
+
+			exit(1);
+
+			close(fd);
+		}
+
+
+	/* creates thread to listem to server*/
+	/* this thread is responsable to print things on the board*/
+
+
+
+	/* creates thread to send to the server*/
+	/* this threads is the one responsable to get keyboard moves*/
 	getchar();
 
 	return 0;
@@ -44,9 +70,10 @@ int main(int argc, char** argv)
 
 int server_setup()
 {
+
 	int fd,n,row,col,nr_pieces,x,y,r,g,b,piece,nr;
 	struct addrinfo **res;
-	char buffer[100];
+	char buffer[BUFF_SIZE];
 
     struct timeval tv;
 
@@ -54,10 +81,10 @@ int server_setup()
 
 
      /* sets time struct to 1 second */
-    tv.tv_sec =1;
+    tv.tv_sec =2;
     tv.tv_usec = 0;
 
-	res = malloc(sizeof(struct addrinfo*));
+	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 	mem_err("Address Information");
 
 	while (1)
 	{
@@ -69,15 +96,18 @@ int server_setup()
 
 		buffer[n] = '\0';
 
+		printf("%s\n", buffer);
+
 		/* sends a connection request to server */
-		send(fd, buffer,BUFF_SIZE,0);
+		if (send(fd, buffer,BUFF_SIZE,0) == -1) 				{func_err("send"); return -1;}
 
 		/* sets a timeout of 1 second*/
 		setsockopt(fd,SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
-		n = recv(fd,buffer,BUFF_SIZE,0);
+		if ( (n = recv(fd,buffer,BUFF_SIZE,0) )== -1) 			{func_err("recv"); return -1;};
 
 		buffer[n] = '\0';
+		printf("%s\n", buffer);
 
 		nr_pieces = 0;
 
@@ -85,28 +115,40 @@ int server_setup()
 		if(strstr(buffer,"WE") != NULL)
 		{	
 
-			n = sprintf(buffer, "CC %d,%d,%d %d,%d,%d\n", RGB_PAC[0], RGB_PAC[1], RGB_PAC[2], RGB_MON[0], RGB_MON[1], RGB_MON[2]);
+			n = sprintf(buffer, "CC [%d,%d,%d] [%d,%d,%d]\n", RGB_PAC[0], RGB_PAC[1], RGB_PAC[2], RGB_MON[0], RGB_MON[1], RGB_MON[2]);
 
 			buffer[n] = '\0';
 
+			printf("%s\n", buffer);
+
+	
+
 			/* sends colour selection to server */
-			send(fd, buffer,BUFF_SIZE,0);
+			if (send(fd, buffer,BUFF_SIZE,0) == -1) 			{func_err("send"); return -1;}
 
 
 			/* waits for map layout */
-			n = recv(fd, buffer, BUFF_SIZE, 0);
-			buffer[n] = '\0';
+			if (( n = recv(fd, buffer, BUFF_SIZE, 0) ) == -1) 	{func_err("recv"); return -1;}
 
-			if(strstr(buffer,"MP") == NULL)  return -1;
+			printf("n = %d\n", n);
+
+			buffer[n] = '\0';
+			
+
+			printf("%s\n", buffer);
+
+
+			if(strstr(buffer,"MP") == NULL)  					{inv_msg(); return -1;}
  		
-			sscanf(buffer, "%*s %d:%d\n", &row, &col);
+			if(sscanf(buffer, "%*s %d:%d\n", &row, &col) != 2) 	{func_err("sscanf"); return -1;}
 
 			/* print board of size row x col */
 			create_board_window(row, col);
 
 			while(1)
 			{
-				n = recv(fd, buffer, BUFF_SIZE, 0);
+				if ((n = recv(fd, buffer, BUFF_SIZE, 0) )==-1) 	{func_err("recv"); return -1;}
+				
 				buffer[n] = '\0';
 				printf("%s\n", buffer);
 
@@ -116,22 +158,15 @@ int server_setup()
 
 
 				/* not expected message, disconnects*/
-				if ( (strstr(buffer, "PT") == NULL)  )
-				{
-					n = sprintf(buffer, "DC");
-					buffer[n] = '\0';
-					send(fd,buffer,BUFF_SIZE,0);
-					printf("%s\n", buffer);
-
-					return -1;
-				}
+				if ( (strstr(buffer, "PT") == NULL)  ) 			{inv_msg(); return -1;}
 
 
 				
 
 				nr_pieces++;
+				printf("%s\n", buffer);
 
-				sscanf(buffer, "%*s %d@%d:%d %d,%d,%d", &piece,&y,&x,&r,&g,&b);
+				if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d]", &piece,&y,&x,&r,&g,&b) != 6) 	{func_err("sscanf"); return -1;}
 
 
 				if     (piece == BRICK)					paint_brick(x,y);
@@ -143,33 +178,29 @@ int server_setup()
 				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);
 		
 
-				else /* not expected piece */
-				{
-					/* disonnects */
-					n = sprintf(buffer, "DC");
-					buffer[n] = '\0';
-					send(fd,buffer,BUFF_SIZE,0);
-
-					return -1;
-				}
+				else /* not expected piece */ 			{fprintf(stderr,"\nInvalid Piece Received...\n"); return -1;}
 
 			}
 
 
 			/* gets number of messages sent */
-			sscanf(buffer, "%*s %d",&nr);
+			if (sscanf(buffer, "%*s %d",&nr) != 1) 		{func_err("sscanf"); return -1;}
+
+			printf("%s\n", buffer);
 
 			if(nr_pieces == nr)
 			{
 				/* all good*/
 				n = sprintf(buffer, "OK");
 				buffer[n] = '\0';
-				send(fd,buffer,BUFF_SIZE,0);
+
+				if (send(fd,buffer,BUFF_SIZE,0) == -1) 	{func_err("send"); return -1;}
+
 				printf("%s\n", buffer);
 
 			}
 
-			return 0;
+			return fd;
 
 
 		}
@@ -181,7 +212,6 @@ int server_setup()
 
 			/* closes connection */
 			close(fd);
-
 
 			/* sleeps and retries */
 			sleep(10);

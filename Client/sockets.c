@@ -62,6 +62,9 @@ int client_connect(struct addrinfo **res, char *ip, char* port)
         return -1;
     }
 
+    freeaddrinfo(*res);
+    res=NULL;
+
     return fd;
 }
 
