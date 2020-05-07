@@ -24,6 +24,7 @@ client* clients_head;
 /* decrements by 4 for each user - 2 for pacman and monters, 2 for the extra fruits */
 board_info status;
 
+
 void * client_thread (void* arg)
 {
 	
@@ -35,6 +36,7 @@ void * client_thread (void* arg)
 		close(fd);
 		return NULL;
 	}
+
 
 
 	close(fd);
@@ -137,11 +139,12 @@ int main(int argc, char** argv)
 int client_setup(int fd)
 {	
 
-	int n,i,j,num_pieces;
+	int n,i,j,num_pieces,new_row, new_col;
 
 	int pac_rgb[3];
 	int mon_rgb[3];
 	
+	board_piece *pacman, *monster;
 	char buffer[BUFF_SIZE];
 
 	/*****************************************/
@@ -155,7 +158,7 @@ int client_setup(int fd)
 
 		printf("%s\n", buffer);
 
-		send(fd,buffer,BUFF_SIZE,0);
+		if (send(fd,buffer,BUFF_SIZE,0) == -1) 		return -1;
 
 		/*****************************************/
 		/******* needs write protected zone******/
@@ -173,13 +176,13 @@ int client_setup(int fd)
 
 		printf("%s\n", buffer);
 
-		send(fd,buffer,BUFF_SIZE,0);
+		if (send(fd,buffer,BUFF_SIZE,0) == -1 ) 		return -1;
 
 		return -1;
 	}
 
 
-	n = recv(fd, buffer, BUFF_SIZE, 0);
+	if ( (n = recv(fd, buffer, BUFF_SIZE, 0) )== -1) 	return -1;
 	buffer[n] = '\0';
 
 	printf("%s\n", buffer);
@@ -188,11 +191,50 @@ int client_setup(int fd)
 
 	
 
-	sscanf(buffer, "%*s %d,%d,%d %d,%d,%d\n", &pac_rgb[0], &pac_rgb[1], &pac_rgb[2], &mon_rgb[0], &mon_rgb[1], &mon_rgb[2] );
+	if ( sscanf(buffer, "%*s %d,%d,%d %d,%d,%d\n", &pac_rgb[0], &pac_rgb[1], &pac_rgb[2], &mon_rgb[0], &mon_rgb[1], &mon_rgb[2] ) != 6) 	return -1;
 
 
 	add_client(&clients_head, (unsigned long) pthread_self(), pac_rgb, mon_rgb);
 
+
+	/*create pacman and monster characters*/
+
+	pacman = (board_piece*) malloc(sizeof(board_piece));
+	pacman->piece = PACMAN;
+	pacman->user_id = pthread_self();
+	pacman->r = pac_rgb[0];
+	pacman->g = pac_rgb[1];
+	pacman->b = pac_rgb[2];
+
+	monster = (board_piece*) malloc(sizeof(board_piece));
+	monster->piece = MONSTER;
+	monster->user_id = pthread_self();
+	monster->r = mon_rgb[0];
+	monster->g = mon_rgb[1];
+	monster->b = mon_rgb[2];
+
+
+	srand(time(NULL));
+	new_row = rand()%status.row;
+	new_col = rand()%status.col;
+
+	while(status.board[new_row][new_col].piece != EMPTY)
+	{
+		srand(time(NULL));
+		new_row = rand()%status.row;
+		new_col = rand()%status.col;
+	}
+
+	status.board[new_row][new_col] = *pacman;
+
+	while(status.board[new_row][new_col].piece != EMPTY)
+	{
+		srand(time(NULL));
+		new_row = rand()%status.row;
+		new_col = rand()%status.col;
+	}
+
+	status.board[new_row][new_col] = *monster;
 
 	/* non empty pieces */
 
@@ -203,7 +245,7 @@ int client_setup(int fd)
 
 	printf("%s\n", buffer);
 
-	send(fd,buffer,BUFF_SIZE,0);
+	if (send(fd,buffer,BUFF_SIZE,0) == -1)		return -1;
 
 
 	num_pieces = 0;
@@ -218,7 +260,9 @@ int client_setup(int fd)
 
 			n = sprintf(buffer, "PT %d@%d:%d %d,%d,%d\n", status.board[i][j].piece,i,j,status.board[i][j].r, status.board[i][j].g, status.board[i][j].b);
 			buffer[n] = '\0';
-			send(fd,buffer,BUFF_SIZE, 0);
+
+			if (send(fd,buffer,BUFF_SIZE, 0) == -1) 	return -1 ;
+
 			printf("%s\n",buffer);
 			num_pieces++;
 		}
@@ -228,11 +272,13 @@ int client_setup(int fd)
 	/* sends summary of sent data */
 	n = sprintf(buffer, "SS %d\n", num_pieces);
 	buffer[n] = '\0';
-	send(fd,buffer,BUFF_SIZE, 0);
+
+	if (send(fd,buffer,BUFF_SIZE, 0) == -1) return -1;
+
 	printf("%s\n",buffer);
 
 	/* waits for client to answer*/
-	n = recv(fd, buffer,BUFF_SIZE,0);
+	if ( (n = recv(fd, buffer,BUFF_SIZE,0) ) == -1) 	return -1;
 
 	/* cleans buffer */
 	buffer[n] = '\0';
@@ -247,6 +293,7 @@ int client_setup(int fd)
 
 	/* setup completed */
 	print_clients(clients_head);
+	print_board(status.row, status.col ,status.board);
 
 
 	return 0;
