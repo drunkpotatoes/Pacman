@@ -70,7 +70,7 @@ void * accept_thread (void* arg)
     tv.tv_usec = 0;
 
     /* allocs memory for struct */
-	res = malloc(sizeof(struct addrinfo*));
+	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL ) 		mem_err("Addrinfo Struct");
 
 	if ( (fd = server_open(res, SERVER_PORT) )== -1)
 	{
