@@ -22,6 +22,8 @@
 
 int RGB_PAC[3];
 int RGB_MON[3];
+
+
 int main(int argc, char** argv)
 {
 
@@ -41,24 +43,22 @@ int main(int argc, char** argv)
 
 	/* sets up server connetion)*/
 	if ( (fd = server_setup() ) == -1) 	
-		{
-			n = sprintf(buffer, "DC");
-			buffer[n] = '\0';
+	{
+		n = sprintf(buffer, "DC");
+		buffer[n] = '\0';
 
-			if (send(fd,buffer,BUFF_SIZE,0) == -1) 	{func_err("send"); return -1;}
+		if (send(fd,buffer,BUFF_SIZE,0) == -1) 	{func_err("send"); return -1;}
 				
-			printf("%s\n", buffer);
+		printf("%s\n", buffer);
 
-			exit(1);
+		exit(1);
 
-			close(fd);
-		}
-
+		close(fd);
+	}
 
 	/* creates thread to listem to server*/
 	/* this thread is responsable to print things on the board*/
-
-
+	
 
 	/* creates thread to send to the server*/
 	/* this threads is the one responsable to get keyboard moves*/
@@ -81,8 +81,8 @@ int server_setup()
 
 
      /* sets time struct to 1 second */
-    tv.tv_sec =2;
-    tv.tv_usec = 0;
+    tv.tv_sec = SECONDS_TIMEOUT;
+    tv.tv_usec = USECONDS_TIMEOUT;
 
 	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 	mem_err("Addrinfo Information");
 
