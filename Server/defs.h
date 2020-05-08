@@ -5,6 +5,9 @@
 
 #define SERVER_PORT "60000"
 
+#define SECONDS_TIMEOUT 5
+#define USECONDS_TIMEOUT 0
+
 #define BUFF_SIZE 100
 #define PIECE_SIZE 90
 

@@ -132,28 +132,30 @@ client * search_client (client* head, unsigned long id)
 }
 
 
-void remove_client(client * head, unsigned long id)
+void remove_client(client ** head, unsigned long id)
 {
-		if(head == NULL)
-	{
-		return;
-	}
+
 	client* aux;
 	client* prev;
 
-	aux = head;                    
-  
+	aux = *head;                    
+  	
+  	if (aux != NULL && aux->user_id == id)
+  	{
+  		*head = aux->next;
+  		free(aux);
+  		return;
+  	}
 
-    while (aux != NULL) 
+    while (aux != NULL && aux->user_id != id) 
     {
-        if (aux->user_id == id)
-        {
-        	return;
-        }
         
         prev = aux;
         aux = aux->next;
     }
+
+    /* not found */
+    if(aux == NULL) 	return;
 
     prev->next = aux->next;
 
@@ -175,6 +177,25 @@ void free_clients(client* head)
 		head = head->next;
 		free(aux);
 	}
+
+	return;
+}
+
+
+void get_pac_rgb(client* cli, int* rgb)
+{
+	rgb[0] = cli->p_r;
+	rgb[1] = cli->p_g;
+	rgb[2] = cli->p_b;
+
+	return;
+}
+
+void get_mon_rgb(client* cli, int* rgb)
+{
+	rgb[0] = cli->m_r;
+	rgb[1] = cli->m_g;
+	rgb[2] = cli->m_b;
 
 	return;
 }

@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include <time.h>
 #include "board.h"
 
 int print_board(int row, int col, board_piece** board)
@@ -134,6 +134,28 @@ void place_piece(board_piece ** board, int piece, int row, int col, unsigned lon
 }
 
 
+void switch_pieces(board_piece** board, int row1, int row2, int col1, int col2)
+{
+	board_piece aux;
+
+	aux = board[row1][col1];
+	board[row1][col1] = board[row2][col2];
+	board[row2][col2] = aux;
+
+	return; 
+}
+
+
+void clear_place(board_piece ** board, int row, int col)
+{
+	board[row][col].piece = EMPTY;
+	board[row][col].user_id = 0;
+	board[row][col].r = 0;
+	board[row][col].g = 0;
+	board[row][col].b = 0;
+}
+
+
 
 void free_board(int row, board_piece** board)
 {
@@ -182,11 +204,64 @@ int is_brick(int row, int col, board_piece** board)
 		return 0;
 }
 
+
+unsigned long int get_id(board_piece ** board, int row, int col)
+{
+	return board[row][col].user_id;
+}
+
 int piece_is_correct(int row, int col, int piece, unsigned long  id, board_piece** board)
 {
 	if ( (board[row][col].piece == piece) && (board[row][col].user_id == id) )
 		return 1;
 	else
 		return 0;
+}
+
+
+void get_randoom_position(board_piece** board, int row, int col, int* i, int* j)
+{
+	int new_row, new_col;
+	srand(time(NULL));
+
+	new_row = rand()%row;
+	new_col = rand()%col;
+
+
+
+	while(!is_empty(new_row, new_col,board))
+	{
+		srand(time(NULL));
+		new_row = rand()%row;
+		new_col = rand()%col;
+	}
+
+	*i = new_row;
+	*j = new_col;
+}
+
+void move_and_clear(board_piece** board, int row, int col, int to_row, int to_col)
+{
+	board_piece aux;
+
+	aux = board[row][col];
+
+	board[to_row][to_col] = aux;
+
+	clear_place(board, row, col);
+
+	return;
+
+}
+
+void move (board_piece** board, int row, int col, int to_row, int to_col)
+{
+	board_piece aux;
+
+	aux = board[row][col];
+
+	board[to_row][to_col] = aux;
+
+	return;
 }
 

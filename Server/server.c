@@ -15,8 +15,10 @@
 #include <ctype.h>
 #include <signal.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "server.h"
+
 
 
 client* clients_head;
@@ -28,17 +30,19 @@ board_info status;
 void * client_thread (void* arg)
 {
 	
-	int  	fd;
+	int  	i, fd;
+
+	int 	coord[4];
+
+	/* initializes last coordenates at -1*/
+	for (i = 0; i < 4; i++) 	coord[i] = -1;
+
 
 	fd = *((int*) arg);
 
-	if (client_setup(fd) == -1)
-	{
-		close(fd);
-		remove_client(clients_head,(unsigned long)pthread_self);
-		return NULL;
-	}
+	if (client_setup(fd,coord) == -1) 		client_disconnect(fd,coord);
 
+	if (client_loop(fd, coord) == -1)		client_disconnect(fd,coord);
 
 
 
@@ -66,8 +70,8 @@ void * accept_thread (void* arg)
 
 
     /* sets time struct to 1 second */
-    tv.tv_sec =1;
-    tv.tv_usec = 0;
+    tv.tv_sec  = SECONDS_TIMEOUT;
+    tv.tv_usec = USECONDS_TIMEOUT;
 
     /* allocs memory for struct */
 	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL ) 		mem_err("Addrinfo Struct");
@@ -117,8 +121,6 @@ void * accept_thread (void* arg)
 }
 
 
-
-
 int main(int argc, char** argv)
 {
 
@@ -138,8 +140,7 @@ int main(int argc, char** argv)
 }
 
 
-
-int client_setup(int fd)
+int client_setup(int fd, int* coord)
 {	
 
 	int 	n,i,j,num_pieces,new_row, new_col;
@@ -202,39 +203,24 @@ int client_setup(int fd)
 
 	/*create pacman and monster characters*/
 
-	srand(time(NULL));
-	new_row = rand()%status.row;
-	new_col = rand()%status.col;
 
-
-
-	while(!is_empty(new_row, new_col,status.board))
-	{
-		srand(time(NULL));
-		new_row = rand()%status.row;
-		new_col = rand()%status.col;
-	}
-
+	get_randoom_position(status.board, status.row, status.col, &new_row, &new_col);
 
 	/*create pacman  characters in board*/
 
 	place_piece(status.board,PACMAN, new_row, new_col, (unsigned long) pthread_self(), pac_rgb[0], pac_rgb[1], pac_rgb[2]);
 
-
-	srand(time(NULL));
-	new_row = rand()%status.row;
-	new_col = rand()%status.col;
+	coord[0] = new_row;
+	coord[1] = new_col;
 
 
-	while(!is_empty(new_row, new_col,status.board))
-	{
-		srand(time(NULL));
-		new_row = rand()%status.row;
-		new_col = rand()%status.col;
-	}
+	get_randoom_position(status.board, status.row, status.col, &new_row, &new_col);
 
 	
 	place_piece(status.board,MONSTER, new_row, new_col, (unsigned long) pthread_self(), mon_rgb[0], mon_rgb[1], mon_rgb[2]);
+
+	coord[2] = new_row;
+	coord[3] = new_col;
 
 	/* non empty pieces */
 
@@ -301,112 +287,525 @@ int client_setup(int fd)
 
 
 	return 0;
-
 }
 
 
-int client_loop(int fd)
+int client_loop(int fd, int * coord)
 {
 
-	int 		n, piece, prev_x, prev_y, x, y;
+	int 				n, piece, prev_x, prev_y, x, y;
 
-	char 		buffer[BUFF_SIZE];
-	client* 	my_client;
+	char 				buffer[BUFF_SIZE];
+	client* 			my_client;
+
+	struct 	timeval 	tv;
+
+	/* sets time struct to 0 seconds  */
+    tv.tv_sec  = 0;
+    tv.tv_usec = 0;
 
 
+	memset(buffer,'\0',BUFF_SIZE);
 
 	my_client = search_client(clients_head, (unsigned long) pthread_self);
 
+	/* sets a timeout of 0 second => removes timeout*/
+	setsockopt(fd,SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
 	while(1)
 	{
-		if( (n = recv(fd, buffer, BUFF_SIZE, 0)  ) != -1 ) 		{func_err("recv"); return -1;}
+		if( (n = recv(fd, buffer, BUFF_SIZE, 0)  ) == -1 ) 		{func_err("recv"); fprintf(stderr, "recv : %s (%d)\n", strerror(errno), errno); return -1;}
+
+		/* 0 bytes received*/
+		if (n == 0) continue;
+
+
+		/* LOCK FIFO */
+
+		/* NEED TO IMPLEMENT*/
 
 		buffer[n] = '\0';
 
-		if(strstr(buffer, "MV"))
-		{
-			sscanf(buffer, "%*s %d @ %d:%d => %d:%d", &piece, &prev_x, &prev_y, &x,&y);
+		printf("Received: %s\n", buffer);
 
+		if(strstr(buffer, "MV") != NULL)
+		{
+			if ( sscanf(buffer, "%*s %d @ %d:%d => %d:%d", &piece, &prev_x, &prev_y, &x,&y) != 5) 	{fprintf(stderr, "\nInvalid Format received from user %lx\n", pthread_self()); return -1;}
 
 			/* server will report the error but not exit execution if protocol is followed but values are invalid */
-			if ( (piece != PACMAN ) && (piece != MONSTER )) 				fprintf(stderr,"\nInvalid Piece received from user %lx\n", pthread_self());
+			if ( (piece != PACMAN ) && (piece != MONSTER )) 										fprintf(stderr,"\nInvalid Piece received from user %lx\n", pthread_self());
 
-			if ( (x > status.row) || (y > status.col) )						fprintf(stderr, "\nInvalid Position received from user %lx\n", pthread_self());
+			if ( (x > status.row) || (y > status.col) )												fprintf(stderr, "\nInvalid Position received from user %lx\n", pthread_self());
 
-			if ( piece_is_correct(x,y,piece, pthread_self(),status.board))	fprintf(stderr, "\nInvalid Last Position received from user %lx\n", pthread_self());
+			if ( piece_is_correct(x,y,piece, pthread_self(),status.board))							fprintf(stderr, "\nInvalid Last Position received from user %lx\n", pthread_self());
+			
 
+			if ( piece == PACMAN) 	
 
-			if (is_empty(x, y, status.board))
-			{
-				write_play_to_main();
-			}
+				if (pacman_movement(x,y,prev_x,prev_y,coord,my_client) == -1) 						fprintf(stderr, "\nUnexpected movement received from user %lx", pthread_self());
 
-			if (is_brick(x,y,status.board))
-			{
-				/*horizontal movement*/
+			if ( piece == MONSTER)	
 
-				if (prev_x == x)
-				{
-					
-
-					if (is_empty(x, prev_y + (prev_y - y), status.board))
-					{
-						/* bounces to x:prevy + (prev_y - y)*/
-						write_play_to_main();
-					}
-
-					if (is_brick(x, prev_y + (prev_y - y), status.board))
-					{
-
-						/* resets counter ? */
-						continue;
-					}
-				}
-
-				/*vertical movement*/
-
-				else if (prev_y == y)
-				{
-					
-					if (is_empty(prev_x + (prev_x - x),y, status.board) )
-					{
-						/* bounces to x:prevy + (prev_y - y)*/
-						write_play_to_main();
-					}
-					if (is_brick(prev_x + (prev_x - x),y, status.board) )
-					{
-						/* resets counter ? */
-						continue;
-					}
-				}
-				
-			}
-
-			if (is_pacman(x,y,status.board))
-			{
-
-			}
-
-			if( is_monster(x,y,status.board))
-			{
-
-			}
+				if (monster_movement(x,y,prev_x,prev_y,coord,my_client) == -1) 						fprintf(stderr, "\nUnexpected movement received from user %lx", pthread_self());
 		}
 
 		else if(strstr(buffer, "DC"))							return -1;
 
-		else													{inv_msg(); return -1;}
+		else													{inv_msg();}
 
 	}
-
-
 }
 
 
-
-void write_play_to_main()
+void client_disconnect(int fd, int* coord)
 {
+	int 	n;
+	char 	buffer[BUFF_SIZE];
+
+	/* closes socket */
+	close(fd);
+
+	/* removes client */
+	remove_client(&clients_head,(unsigned long)pthread_self);
+
+	/* cleans pacman and monster from board */
+
+	if(coord[0] != -1 && coord[1] != -1)
+	{
+		clear_place(status.board, coord[0], coord[1]);
+		n = sprintf(buffer, "CL %d:%d", coord[0], coord[1]);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+	} 	
+	if(coord[2] != -1 && coord[3] != -1)
+	{
+		clear_place(status.board, coord[2], coord[3]);
+		n = sprintf(buffer, "CL %d:%d", coord[2], coord[3]);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+	}	
+	
 	return;
 }
+
+
+void write_play_to_main(char* play)
+{
+	if (play == NULL)			return;
+	
+	printf("%s\n", play);
+
+	return;
+}
+
+
+int pacman_movement(int x, int y, int prev_x , int prev_y, int* coord, client* my_client)
+{
+	int 	n, new_x, new_y;
+	int 	rgb[3];
+
+	char 	buffer[BUFF_SIZE];
+	char 	buffer_aux[PIECE_SIZE];
+
+
+	get_pac_rgb(my_client,rgb);
+
+
+	/* next position is empty */
+	if (is_empty(x, y, status.board))
+	{
+		/* moves pacman */	
+		move_and_clear(status.board,prev_x, prev_y, x, y);
+
+		n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, x,y, rgb[0], rgb[1], rgb[2]);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		/*updates pacman last coord*/
+		coord[0] = x;
+		coord[1] = y;
+
+		return 0;
+	}
+
+	/* next position is a brick */
+	if (is_brick(x,y,status.board))
+	{
+		/*horizontal movement*/
+		if (prev_x == x)
+		{
+			/* gets target y for the bounce */		
+			new_y = prev_y + (prev_y-y);
+
+			/* bounce to empty place */
+			if (is_empty(x, new_y, status.board))
+			{
+				/* moves pacman */
+				move_and_clear(status.board,prev_x, prev_y, x, new_y);
+
+				n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, x,new_y, rgb[0], rgb[1], rgb[2]);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				/*updates pacman last coord*/
+				coord[0] = x;
+				coord[1] = new_y;
+
+				return 0;
+			}
+
+			/* bounce agains brick */
+			if (is_brick(x,new_y, status.board))
+			{
+
+				/*pacman stays were it is*/
+
+				return 0;
+			}
+
+			/* bounce to object, updates y*/
+			else
+			{
+				y = new_y;
+			}
+		}
+
+		/*vertical movement*/
+		else if (prev_y == y)
+		{
+			/* gets target x for the bounce */	
+			new_x = prev_x + (prev_x - x);
+
+			/* bounce to empty place */
+			if (is_empty(new_x,y, status.board) )
+			{
+				/* moves pacman */
+				move_and_clear(status.board,prev_x, prev_y, new_x, y);
+
+				n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, new_x,y, rgb[0], rgb[1], rgb[2]);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				/*updates pacman last coord*/
+				coord[0] = new_x;
+				coord[1] = y;
+
+
+				return 0;
+			}
+
+			/* bounce agains a wall */
+			if (is_brick(new_x,y, status.board) )
+			{
+
+				/*pacman stays were it is*/
+				return 0;
+			}
+
+			/* bounce to object, updates x */
+			else
+			{
+				new_x = x;
+			}
+		}		
+	}
+
+	/* hits enemy pacman */
+	if (is_pacman(x,y,status.board))
+	{
+		/* characters change positions */
+		switch_pieces(status.board,prev_x, x, prev_y, y);
+
+		n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, x,y, rgb[0], rgb[1], rgb[2]);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		n = sprintf(buffer, "PT %s", print_piece(status.board, prev_x, prev_y,buffer_aux));
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		/*updates pacman last coord*/
+		coord[0] = x;
+		coord[1] = y;
+
+		return 0;
+	}
+
+	/* hits monster*/
+	if( is_monster(x,y,status.board))
+	{
+
+		/* friendly monster*/
+		if(get_id(status.board, x, y) == pthread_self())
+		{
+			/* pacman and monster change positions*/
+			switch_pieces(status.board,prev_x, x, prev_y, y);
+
+			n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, x,y, rgb[0], rgb[1], rgb[2]);
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+			n = sprintf(buffer, "PT %s", print_piece(status.board, prev_x, prev_y,buffer_aux));
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+			/*updates pacman last coord*/
+			coord[0] = x;
+			coord[1] = y;
+
+			return 0;
+		}
+
+		/* enemy monster*/
+		else
+		{
+			/* pacman gets killed */
+
+			/* get next pacman position*/
+			get_randoom_position(status.board, status.row, status.col, &new_x, &new_y);
+
+			/* moves pacman */
+			move_and_clear(status.board,prev_x, prev_y, new_x, new_y);
+
+			n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, new_x,new_y, rgb[0], rgb[1], rgb[2]);
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+			n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+			/*updates pacman last coord*/
+			coord[0] = new_x;
+			coord[1] = new_y;
+
+			return 0;
+
+
+		}
+	}
+
+	return -1;
+}
+
+int monster_movement(int x, int y, int prev_x , int prev_y,int* coord, client* my_client)
+{
+	int 	n, new_x, new_y;
+	int 	rgb[3];
+
+	char 	buffer[BUFF_SIZE];
+	char 	buffer_aux[PIECE_SIZE];
+
+
+
+	get_mon_rgb(my_client,rgb);
+
+
+	/* next position is empty */
+	if (is_empty(x, y, status.board))
+	{
+		/* moves monster */	
+		move_and_clear(status.board,prev_x, prev_y, x, y);
+
+		n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", MONSTER, x,y, rgb[0], rgb[1], rgb[2]);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		coord[2] = x;
+		coord[3] = y;
+
+		return 0;
+	}
+
+	/* next position is a brick */
+	if (is_brick(x,y,status.board))
+	{
+		/*horizontal movement*/
+		if (prev_x == x)
+		{
+			/* gets target y for the bounce */		
+			new_y = prev_y + (prev_y-y);
+
+			/* bounce to empty place */
+			if (is_empty(x, new_y, status.board))
+			{
+				/* moves pacman */
+				move_and_clear(status.board,prev_x, prev_y, x, new_y);
+
+				n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, x,new_y, rgb[0], rgb[1], rgb[2]);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				coord[2] = x;
+				coord[3] = new_y;
+
+				return 0;
+			}
+
+			/* bounce agains brick */
+			if (is_brick(x,new_y, status.board))
+			{
+
+				/*pacman stays were it is*/
+
+				return 0;
+			}
+
+			/* bounce to object, updates y*/
+			else
+			{
+				y = new_y;
+			}
+		}
+
+		/*vertical movement*/
+		else if (prev_y == y)
+		{
+			/* gets target x for the bounce */	
+			new_x = prev_x + (prev_x - x);
+
+			/* bounce to empty place */
+			if (is_empty(new_x,y, status.board) )
+			{
+				/* moves monster */
+				move_and_clear(status.board,prev_x, prev_y, new_x, y);
+
+				n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", PACMAN, new_x,y, rgb[0], rgb[1], rgb[2]);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+				buffer[n] = '\0';
+				write_play_to_main(buffer);
+
+				coord[2] = new_x;
+				coord[3] = y;
+
+				return 0;
+			}
+
+			/* bounce agains a wall */
+			if (is_brick(new_x,y, status.board) )
+			{
+
+				/*monster stays were it is*/
+				return 0;
+			}
+
+			/* bounce to object, updates x */
+			else
+			{
+				new_x = x;
+			}
+		}		
+	}
+
+	/* hits enemy monster */
+	if (is_monster(x,y,status.board))
+	{
+		/* characters change positions */
+		switch_pieces(status.board,prev_x, x, prev_y, y);
+
+		n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", MONSTER, x,y, rgb[0], rgb[1], rgb[2]);
+		buffer[n] = '\0';
+		write_play_to_main(buffer);
+
+		n = sprintf(buffer, "PT %s", print_piece(status.board, prev_x, prev_y,buffer_aux));
+		buffer[n] = '\0';
+
+		write_play_to_main(buffer);
+
+		coord[2] = x;
+		coord[3] = y;
+
+		return 0;
+	}
+
+	/* hits monster*/
+	if( is_pacman(x,y,status.board))
+	{
+
+		/* friendly pacman*/
+		if(get_id(status.board, x, y) == pthread_self())
+		{
+			/* pacman and monster change positions*/
+			switch_pieces(status.board,prev_x, x, prev_y, y);	
+
+			n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", MONSTER, x,y, rgb[0], rgb[1], rgb[2]);
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+
+			n = sprintf(buffer, "PT %s", print_piece(status.board, prev_x, prev_y,buffer_aux));
+			buffer[n] = '\0';
+
+			write_play_to_main(buffer);
+
+			coord[2] = x;
+			coord[3] = y;
+
+			return 0;
+		}
+
+		/* enemy pacman*/
+		else
+		{
+			/* pacman gets killed */
+
+			/* get next pacman position */
+			get_randoom_position(status.board, status.row, status.col, &new_x, &new_y);
+
+			/* moves pacman */
+			move(status.board,x, y, new_x, new_y);
+
+			/* moves monster and clears position*/
+			move_and_clear(status.board,prev_x, prev_y, x, y);
+
+			n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d]\n", MONSTER, x,y, rgb[0], rgb[1], rgb[2]);
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+
+			n = sprintf(buffer, "PT %s", print_piece(status.board, new_x, new_y,buffer_aux));
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+			n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+			buffer[n] = '\0';
+			write_play_to_main(buffer);
+
+			coord[2] = x;
+			coord[3] = y;
+			
+			return 0;
+
+
+		}
+	}
+
+	return -1;
+}
+
+
+
 
