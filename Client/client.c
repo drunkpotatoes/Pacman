@@ -188,7 +188,7 @@ int server_setup()
 
 			printf("%s\n", buffer);
 
-			if(nr_pieces == nr)
+			if(nr_pieces >= nr)
 			{
 				/* all good*/
 				n = sprintf(buffer, "OK");
