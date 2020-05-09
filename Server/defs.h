@@ -12,5 +12,5 @@
 #define PIECE_SIZE 90
 
 #define BOARD_FILE "board.txt"
-
+#define FIFO_FILE  "pac_fifo"
 

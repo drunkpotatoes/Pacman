@@ -6,6 +6,8 @@ typedef struct _client
 {
    unsigned long user_id;
 
+   int fid;
+
    int p_r;
    int p_g;
    int p_b;
@@ -19,10 +21,11 @@ typedef struct _client
 
 }client;
 
-void add_client(client**,unsigned long, int*, int*);
+void add_client(client**,unsigned long,int,int*, int*);
 void print_clients(client *);
 client* search_client(client*, unsigned long);
 void free_clients(client*);
 void remove_client(client**, unsigned long);
 void get_pac_rgb(client*, int*);
 void get_mon_rgb(client*, int*);
+int send_all_clients(client*, char*, int);

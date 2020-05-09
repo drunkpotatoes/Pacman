@@ -20,7 +20,7 @@
 
 
 
-void add_client(client** client_list, unsigned long id, int* pac, int *mon)
+void add_client(client** client_list, unsigned long id, int fd, int* pac, int *mon)
 {
 	client* new_cli;
 
@@ -31,6 +31,7 @@ void add_client(client** client_list, unsigned long id, int* pac, int *mon)
 		if ((new_cli = (client *) malloc(sizeof(client)) ) == NULL) 	mem_err("Client Struct");
 
 		new_cli->user_id = id;
+		new_cli->fid = fd;
 		new_cli->p_r = pac[0];
 		new_cli->p_g = pac[1];
 		new_cli->p_b = pac[2];
@@ -62,6 +63,7 @@ void add_client(client** client_list, unsigned long id, int* pac, int *mon)
 		if ( ( new_cli = (client*) malloc(sizeof(client)) ) == NULL) 	mem_err("Client Struct");
 
 		new_cli->user_id = id;
+		new_cli->fid = fd;
 		new_cli->p_r = pac[0];
 		new_cli->p_g = pac[1];
 		new_cli->p_b = pac[2];
@@ -87,15 +89,15 @@ void add_client(client** client_list, unsigned long id, int* pac, int *mon)
 
 void print_clients(client * head)
 {
+	client* aux;
 
 	if(head == NULL)
 	{
-		printf("WTF\n");
+		printf("\nNo clients.\n");
+		return;
 	}
-	client* aux;
 
 	aux = head;
-  
 
     while (aux != NULL) 
     {
@@ -139,7 +141,8 @@ void remove_client(client ** head, unsigned long id)
 	client* prev;
 
 	aux = *head;                    
-  	
+ 
+
   	if (aux != NULL && aux->user_id == id)
   	{
   		*head = aux->next;
@@ -149,9 +152,10 @@ void remove_client(client ** head, unsigned long id)
 
     while (aux != NULL && aux->user_id != id) 
     {
-        
+
         prev = aux;
         aux = aux->next;
+       
     }
 
     /* not found */
@@ -184,6 +188,9 @@ void free_clients(client* head)
 
 void get_pac_rgb(client* cli, int* rgb)
 {
+
+	if (cli == NULL) 	return;
+
 	rgb[0] = cli->p_r;
 	rgb[1] = cli->p_g;
 	rgb[2] = cli->p_b;
@@ -193,9 +200,32 @@ void get_pac_rgb(client* cli, int* rgb)
 
 void get_mon_rgb(client* cli, int* rgb)
 {
+	if (cli == NULL) 	return;
+
 	rgb[0] = cli->m_r;
 	rgb[1] = cli->m_g;
 	rgb[2] = cli->m_b;
 
 	return;
+}
+
+
+int send_all_clients(client* head, char* msg, int msg_size)
+{
+	client* aux;
+
+	/* no clients :( */															
+	if (head == NULL)  								return -1;
+
+	aux = head;
+
+	while(aux->next != NULL)
+	{	
+
+		/* sends message to all clients*/
+ 		send(aux->fid, msg, msg_size,0);
+
+		aux = aux->next;
+
+	}
 }
