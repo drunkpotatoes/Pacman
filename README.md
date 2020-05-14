@@ -22,7 +22,7 @@ Server will them send a message mapping the board containing the number of rows 
 
 Server: MP  ROW:COL 
 
-Server: PT  PIECE @ Y:X [R,G,B]           
+Server: PT  PIECE @ Y:X [R,G,B] # USER_ID           
 
 Server repeates PT until it has sent all the non-empty pieces. After sending all the pieces, it will send a summary message containing the number of pieces sent.
 The client will see this message and confirm if it received all of  the pieces or not, if not, disconnects.
