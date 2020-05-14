@@ -38,7 +38,7 @@ Client: DC
 
 The game loop consists of the server telling the clients eitheir to clear or to put pieces. And for the client to ask the server to move pieces. If the client move was valid the server will send a confirmation.
 
-Server: PT PIECE @ Y:X [R,G,B]   
+Server: PT PIECE @ Y:X [R,G,B] # USER_ID
 
 Server: CL Y:X
 
