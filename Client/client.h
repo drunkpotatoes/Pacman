@@ -3,5 +3,16 @@
 #include "sockets.h"
 #include "UI_library.h"
 
+typedef struct Event_ShowSomething_Data{
+	int x;
+	int y;
+	int piece;
+	int r;
+	int g;
+	int b;
+} Event_ShowSomething_Data;
 
-int server_setup(void);
+void * server_listen_thread(void*);
+int server_setup(int*);
+void server_disconnect(int);
+int game_loop(int fd);

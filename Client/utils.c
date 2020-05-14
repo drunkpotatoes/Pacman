@@ -14,13 +14,24 @@ void mem_err (char * variable)
 }
 
 
-void func_err(char* variable)
+void func_err(char* func_name)
 {
-	fprintf (stderr, "\nError in function %s...\n", variable);
+	fprintf (stderr, "\nError in function: %s...\n", func_name);
 }
 
-void inv_msg()
+void inv_msg(char* msg)
 {
-	fprintf(stderr, "\nInvalid Message Received...\n");
+	fprintf(stderr, "\nInvalid Message Received: %s\n", msg);
+}
+
+
+void inv_format(char* msg)
+{
+	fprintf(stderr, "\nInvalid Formated Message Received: %s\n", msg);
+}
+
+void inv_piece(int piece)
+{
+	fprintf(stderr, "\nInvalid Piece Received : '%c' \n", piece);
 }
 
