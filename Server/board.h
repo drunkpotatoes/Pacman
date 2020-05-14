@@ -1,7 +1,7 @@
 #include "defs.h"
 #include "utils.h"
 
-typedef struct board_pieces{
+typedef struct board_piece{
 	int piece;
 	unsigned long user_id;
 	int r;
@@ -27,6 +27,7 @@ int empty_spaces(int,int,board_piece**);
 void place_piece(board_piece **,int,int,int,unsigned long,int,int,int);
 void switch_pieces(board_piece**,int,int,int,int);
 void clear_place(board_piece **, int, int);
+void clear_client(board_piece**, int, int, unsigned long, int*);
 char* print_piece(board_piece **, int, int,char*);
 void free_board(int row, board_piece**);
 int is_empty(int, int, board_piece**);

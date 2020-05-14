@@ -67,6 +67,7 @@ board_info init_board()
 				c = fgetc(fid);
 			}
 			board[i][j].piece = c;
+			board[i][j].user_id = 0;
 			board[i][j].r = 0;
 			board[i][j].g = 0;
 			board[i][j].b = 0;
@@ -111,7 +112,7 @@ char* print_piece(board_piece ** board, int row, int col, char* buffer)
 {
 	int n;
 
-	n = sprintf(buffer, "%d @ %d:%d [%d,%d,%d]", board[row][col].piece ,row ,col ,board[row][col].r, board[row][col].g, board[row][col].b);
+	n = sprintf(buffer, "%d @ %d:%d [%d,%d,%d] # %lx", board[row][col].piece ,row ,col ,board[row][col].r, board[row][col].g, board[row][col].b, board[row][col].user_id);
 	
 	buffer[n] = '\0';
 
@@ -153,6 +154,31 @@ void clear_place(board_piece ** board, int row, int col)
 	board[row][col].r = 0;
 	board[row][col].g = 0;
 	board[row][col].b = 0;
+}
+
+void clear_client(board_piece** board, int rows, int cols, unsigned long id, int* coord)
+{
+	int i, j;
+	int count = 0;
+
+	for (i = 0; i < rows ; i++)
+	{
+		for(j = 0; j < cols ; j++)
+		{
+			if(board[i][j].user_id == id)
+			{
+				coord[count*2] = i;
+				coord[count*2+1] = j;
+				clear_place(board, i, j);
+
+				count++;
+			}
+
+			if (count == 2) return;
+		}
+	}
+
+	return;
 }
 
 

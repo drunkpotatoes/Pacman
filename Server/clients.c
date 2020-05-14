@@ -19,7 +19,6 @@
 #include "clients.h"
 
 
-
 void add_client(client** client_list, unsigned long id, int fd, int* pac, int *mon)
 {
 	client* new_cli;
@@ -119,11 +118,16 @@ client * search_client (client* head, unsigned long id)
 
 	aux = head;
   
+  	printf("here\n");
 
     while (aux != NULL) 
     {
+    	printf("\n| User_id: %lx | RGB PAC %d,%d,%d  | RGB MON %d,%d,%d |\n", 
+       		aux->user_id, aux->p_r, aux->p_g, aux->p_b, aux->p_r, aux->p_g,aux->p_b);
+
         if (aux->user_id == id)
         {
+        	
         	return aux;
         }
         
@@ -186,25 +190,67 @@ void free_clients(client* head)
 }
 
 
-void get_pac_rgb(client* cli, int* rgb)
+void get_pac_rgb(client* head, unsigned long id, int* r, int* g, int*b)
 {
 
-	if (cli == NULL) 	return;
+	if(head == NULL)
+	{
+		return;
+	}
+	client* aux;
 
-	rgb[0] = cli->p_r;
-	rgb[1] = cli->p_g;
-	rgb[2] = cli->p_b;
+	aux = head;
+
+    while (aux != NULL) 
+    {
+    	printf("\n| User_id: %lx | RGB PAC %d,%d,%d  | RGB MON %d,%d,%d |\n", 
+       		aux->user_id, aux->p_r, aux->p_g, aux->p_b, aux->p_r, aux->p_g,aux->p_b);
+    	
+        if (aux->user_id == id)
+        {
+        	
+        	*r = aux->p_r;
+        	*g = aux->p_g;
+        	*b = aux->p_b;
+
+        	return;
+        }
+        
+        aux = aux->next;
+    }
 
 	return;
 }
 
-void get_mon_rgb(client* cli, int* rgb)
+void get_mon_rgb(client* head, unsigned long id ,int* r, int* g, int* b)
 {
-	if (cli == NULL) 	return;
 
-	rgb[0] = cli->m_r;
-	rgb[1] = cli->m_g;
-	rgb[2] = cli->m_b;
+	if(head == NULL)
+	{
+		return;
+	}
+
+	client* aux;
+
+	aux = head;
+
+    while (aux != NULL) 
+    {
+    	printf("\n| User_id: %lx | RGB PAC %d,%d,%d  | RGB MON %d,%d,%d |\n", 
+       		aux->user_id, aux->p_r, aux->p_g, aux->p_b, aux->p_r, aux->p_g,aux->p_b);
+    	
+        if (aux->user_id == id)
+        {
+        	
+        	*r = aux->m_r;
+        	*g = aux->m_g;
+        	*b = aux->m_b;
+
+        	return;
+        }
+        
+        aux = aux->next;
+    }
 
 	return;
 }
@@ -214,18 +260,21 @@ int send_all_clients(client* head, char* msg, int msg_size)
 {
 	client* aux;
 
-	/* no clients :( */															
-	if (head == NULL)  								return -1;
+
+	if(head == NULL)
+	{
+		return -1;
+	}
 
 	aux = head;
 
-	while(aux->next != NULL)
-	{	
-
-		/* sends message to all clients*/
- 		send(aux->fid, msg, msg_size,0);
+    while (aux != NULL) 
+    {
+    	/* sends message to all clients*/
+        send(aux->fid, msg, msg_size,0);
 
 		aux = aux->next;
+    }
 
-	}
+    return 0;
 }

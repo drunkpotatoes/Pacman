@@ -26,6 +26,6 @@ void print_clients(client *);
 client* search_client(client*, unsigned long);
 void free_clients(client*);
 void remove_client(client**, unsigned long);
-void get_pac_rgb(client*, int*);
-void get_mon_rgb(client*, int*);
+void get_pac_rgb(client*, unsigned long,int*, int*, int*);
+void get_mon_rgb(client*, unsigned long, int*, int*, int*);
 int send_all_clients(client*, char*, int);
