@@ -118,7 +118,7 @@ int server_open(struct addrinfo **res,char* port)
     }
     
     /*marks socket as passive for accepting connections*/
-    n = listen(fd,5)==-1;
+    n = listen(fd,100)==-1;
     if(n == -1)
     {
         printf("ERROR: listen\n");

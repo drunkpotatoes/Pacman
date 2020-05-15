@@ -13,6 +13,7 @@
 #define USECONDS_TIMEOUT 0
 
 #define USER_MAX_TIME_USECONDS 500000
+#define USER_TIMEOUT_USECONDS 30000000
 
 #define BOARD_FILE "board.txt"
 #define FIFO_FILE  "pac_fifo"

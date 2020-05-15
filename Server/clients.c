@@ -80,7 +80,6 @@ void add_client(client** client_list, unsigned long id, int fd, int* pac, int *m
 
 
 		return;
-
 	}
 }
 
@@ -118,12 +117,9 @@ client * search_client (client* head, unsigned long id)
 
 	aux = head;
   
-  	printf("here\n");
 
     while (aux != NULL) 
     {
-    	printf("\n| User_id: %lx | RGB PAC %d,%d,%d  | RGB MON %d,%d,%d |\n", 
-       		aux->user_id, aux->p_r, aux->p_g, aux->p_b, aux->p_r, aux->p_g,aux->p_b);
 
         if (aux->user_id == id)
         {
@@ -203,8 +199,6 @@ void get_pac_rgb(client* head, unsigned long id, int* r, int* g, int*b)
 
     while (aux != NULL) 
     {
-    	printf("\n| User_id: %lx | RGB PAC %d,%d,%d  | RGB MON %d,%d,%d |\n", 
-       		aux->user_id, aux->p_r, aux->p_g, aux->p_b, aux->p_r, aux->p_g,aux->p_b);
     	
         if (aux->user_id == id)
         {
@@ -236,8 +230,7 @@ void get_mon_rgb(client* head, unsigned long id ,int* r, int* g, int* b)
 
     while (aux != NULL) 
     {
-    	printf("\n| User_id: %lx | RGB PAC %d,%d,%d  | RGB MON %d,%d,%d |\n", 
-       		aux->user_id, aux->p_r, aux->p_g, aux->p_b, aux->p_r, aux->p_g,aux->p_b);
+    
     	
         if (aux->user_id == id)
         {

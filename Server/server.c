@@ -20,7 +20,6 @@
 #include <pthread.h>
 #include <errno.h>
 #include <signal.h>
-
 #include <time.h>
 
 #include "server.h"
@@ -32,17 +31,24 @@ client* clients_head;
 /* decrements by 4 for each user - 2 for pacman and monters, 2 for the extra fruits */
 board_info status;
 
+
+pthread_mutex_t * lock_col;
+
+pthread_mutex_t  lock_clients;
+
+pthread_mutex_t  lock_fifo;
+
+int shut_down;
+
 void handler (int sigtype)
 {
-
-	printf("\nClient Disconnect\n");
+	shut_down = 1;
 }
 
 
 void * client_thread (void* arg)
 {
 	int  	fd, ff_fd;
-	struct 	sigaction action;
 
 	fd = *((int*) arg);
 
@@ -50,16 +56,12 @@ void * client_thread (void* arg)
 	/* initializes fifo file with -1*/
 	ff_fd = -1;
 
-	memset(&action, 0 , sizeof(action));
-	action.sa_handler = handler;
-	sigemptyset(&action.sa_mask);
-	sigaction(SIGPIPE, &action, NULL);
-
-
 
 	if (client_setup(fd,&ff_fd) == -1) 			{client_disconnect(fd,ff_fd); return NULL;}
 
 	if (client_loop(fd,ff_fd) == -1)			{client_disconnect(fd,ff_fd); return NULL;}
+
+	client_disconnect(fd,ff_fd);
 
 	return NULL;
 }
@@ -86,6 +88,8 @@ void * accept_thread (void* arg)
     tv.tv_sec  = SECONDS_TIMEOUT;
     tv.tv_usec = USECONDS_TIMEOUT;
 
+
+
     /* allocs memory for struct */
 	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL ) 		mem_err("Addrinfo Struct");
 
@@ -96,7 +100,7 @@ void * accept_thread (void* arg)
 
 	/* increments port number*/
 
-	while(1)
+	while(!shut_down)
 	{
 		/* accepts connection */
 		newfd=accept(fd,(struct sockaddr*)&addr,&addrlen);
@@ -122,8 +126,6 @@ void * accept_thread (void* arg)
 			pthread_create(&thread_id , NULL, client_thread, (void*) &newfd);
 
 		}
-
-
 	}
 
 	/* closes connection */
@@ -137,16 +139,55 @@ void * accept_thread (void* arg)
 int main(int argc, char** argv)
 {
 
-	
+	int 		i;
     pthread_t 	thread_id;
-   
+   	struct 		sigaction action_sig_pipe;
+   	struct 		sigaction action_int;
+
+
+   	/* sets ignore to sig pipe signal*/
+   	memset(&action_sig_pipe, 0 , sizeof(struct sigaction));
+	action_sig_pipe.sa_handler = SIG_IGN;
+	sigemptyset(&action_sig_pipe.sa_mask);
+	sigaction(SIGPIPE, &action_sig_pipe, NULL);
+
+	/* handles sig int and exits safelly*/
+	memset(&action_int, 0 , sizeof(struct sigaction));
+	action_int.sa_handler = handler;
+	sigemptyset(&action_int.sa_mask);
+	sigaction(SIGINT, &action_int, NULL);
+
 	status = init_board();
 
 	clients_head = NULL;
 
+	shut_down = 0;
+
+
+	/* creates lock for each col*/
+	if ( (lock_col = (pthread_mutex_t*) malloc(sizeof(pthread_mutex_t)*status.col) ) == NULL) 			  mem_err("lock_col");
+
+	/* initializes lock for clients*/
+	if (pthread_mutex_init(&lock_clients,NULL) != 0)								{func_err("pthread_mutex_init"); exit(1);}
+
+	/* initializes lock for fifo*/
+	if (pthread_mutex_init(&lock_fifo,NULL) != 0)									{func_err("pthread_mutex_init"); exit(1);}
+
+	/* initializes lock for each col*/
+	for (i = 0; i < status.col ; i++)
+		if (pthread_mutex_init(&lock_col[i],NULL) != 0)								{func_err("pthread_mutex_init"); exit(1);}
+
+
+	/* creates thread to accept clients*/
 	pthread_create(&thread_id , NULL, accept_thread, NULL);
 
+	/* thread to send information to all clients*/
 	main_thread();
+
+	/* waits for all threads to clean up*/
+	sleep(2);
+
+	server_disconnect();
 
 	return 0;
 }
@@ -324,8 +365,8 @@ int client_loop(int fd, int ff_fd)
 {
 
 	int 				n, piece, prev_x, prev_y, x, y, new_y, new_x;
-	int 				pac_rgb[3], mon_rgb[3];
-	char 				buffer[BUFF_SIZE];
+	int 				pac_rgb[3], mon_rgb[3], coord[4];
+	char 				buffer[BUFF_SIZE], buffer_aux[BUFF_SIZE];
 	struct 	timeval 	tv, start, end;
 
 	double 				diff;
@@ -351,19 +392,68 @@ int client_loop(int fd, int ff_fd)
 	gettimeofday(&start,NULL);
 
 
-	while(1)
+	while(!shut_down)
 	{
 		n = recv(fd, buffer, BUFF_SIZE, 0);
 
+		/* locks fifo*/
+		pthread_mutex_lock(&lock_fifo);
 		/* 0 bytes received*/
 		if (n == 0) continue;
 
 		/* timedout */
 		if  (n == -1)
 		{	
+			/* just a timeout - unlocks fifo */
+			pthread_mutex_unlock(&lock_fifo);
 			n = sprintf(buffer, "KEEP ALIVE\n");
 			buffer[n] = '\0';
 			if (send(fd,buffer, BUFF_SIZE,0)  == -1) 				return -1;
+
+			gettimeofday(&end,NULL);
+
+			diff = (double) (end.tv_usec - start.tv_usec) + (double) (end.tv_sec - start.tv_sec)*1000000;
+
+
+			/*user inative for too long*/
+			if (diff >= USER_TIMEOUT_USECONDS)
+			{
+				/* cleans pacman and monster from board */
+				clear_client(status.board, status.row, status.col, (unsigned long) pthread_self(), coord);
+
+
+				/* writes clear to main*/
+				if(coord[0] != -1 && coord[1] != -1 && coord[2] != -1 && coord[3] != -1)
+				{
+					/* places pacman in new random position*/
+					get_randoom_position(status.board, status.row, status.col, &new_x, &new_y);
+					place_piece(status.board,PACMAN, new_x, new_y, (unsigned long) pthread_self(), pac_rgb[0], pac_rgb[1], pac_rgb[2]);
+					
+					/* places monster in new random position*/
+					get_randoom_position(status.board, status.row, status.col, &x, &y);
+					place_piece(status.board,MONSTER, x, y, (unsigned long) pthread_self(), mon_rgb[0], mon_rgb[1], mon_rgb[2]);
+					
+					n = sprintf(buffer, "CL %d:%d", coord[2], coord[3]);
+					buffer[n] = '\0';
+					write_play_to_main(buffer,ff_fd);
+
+					n = sprintf(buffer, "CL %d:%d", coord[0], coord[1]);
+					buffer[n] = '\0';
+					write_play_to_main(buffer,ff_fd);
+
+					n = sprintf(buffer, "PT %s", print_piece(status.board, new_x, new_y, buffer_aux));
+					buffer[n] = '\0';
+					write_play_to_main(buffer, ff_fd);
+
+					n = sprintf(buffer, "PT %s", print_piece(status.board, x, y, buffer_aux));
+					buffer[n] = '\0';
+					write_play_to_main(buffer, ff_fd);
+				} 				
+
+				/*updates clock*/
+				gettimeofday(&start,NULL);
+
+			}
 
 			continue;
 		}
@@ -429,8 +519,10 @@ int client_loop(int fd, int ff_fd)
 		else if(strstr(buffer, "DC"))							return -1;
 
 		else													{inv_msg(buffer);}
-
 	}
+
+
+	return -1;
 }
 
 
@@ -443,9 +535,18 @@ void client_disconnect(int fd, int ff_fd)
 	memset(buffer,' ',BUFF_SIZE*sizeof(char));
 	memset(coord, -1, 4*sizeof(int));
 
-	/* closes socket */
-	if (fd != -1 ) 		close(fd); 		
+	
 
+	/* closes socket */
+	if (fd != -1 ) 			
+	{	
+		/* sends dc message*/
+		n = sprintf(buffer, "DC\n");
+		buffer[n] = '\0';
+		send(fd,buffer, BUFF_SIZE,0);
+
+		close(fd); 	
+	}
 	/* removes client if finds a match */
 	remove_client(&clients_head,(unsigned long)pthread_self());
 
@@ -470,7 +571,6 @@ void client_disconnect(int fd, int ff_fd)
 
 	/* closes fifo */
 	if (fd != -1 ) 		close(ff_fd);
-	
 }
 
 
@@ -512,12 +612,12 @@ int main_thread()
 	
 
 	/* main cycle */
-	while(1)
+	while(!shut_down)
 	{
 
-		if (  (n = read(fd, buffer, BUFF_SIZE) ) == -1 ) 				{func_err("read");} 
+		if (  (n = read(fd, buffer, BUFF_SIZE) ) == -1 ) 				continue; 
 
-		if (n == 0)														{continue;}
+		if (n == 0)														continue;
 
 
 		buffer[n] = '\0';
@@ -529,9 +629,29 @@ int main_thread()
 	}
 
 
+	sleep(1);
+	close(fd);
+
 	return 0;
 }
 
+
+void server_disconnect()
+{
+	int i;
+
+	for(i = 0; i < status.col ; i++)
+		if (pthread_mutex_destroy(&lock_col[i])) 			func_err("pthread_mutex_destroy");
+	
+	/* frees mutexes */
+	free(lock_col);
+	
+	if (pthread_mutex_destroy(&lock_clients)) 				func_err("pthread_mutex_destroy");
+	if (pthread_mutex_destroy(&lock_fifo)) 					func_err("pthread_mutex_destroy");
+
+	free_clients(clients_head);
+	free_board(status.row, status.board);
+}
 
 
 int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int fd, int* rgb)
@@ -568,10 +688,6 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
-		n = sprintf(buffer, "OK %d %d:%d\n",PACMAN,x,y);
-		buffer[n] = '\0';
-
-		if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
 	}
 
 	/* hits enemy pacman */
@@ -587,11 +703,6 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
-
-		n = sprintf(buffer, "OK %d %d:%d\n",PACMAN, x,y);
-		buffer[n] = '\0';
-
-		if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
 
 	}
 
@@ -613,11 +724,6 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 			buffer[n] = '\0';
 			write_play_to_main(buffer,ff_fd);
 
-
-			n = sprintf(buffer, "OK %d %d:%d\n",PACMAN,x,y);
-			buffer[n] = '\0';
-
-			if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
 		}
 
 		/* enemy monster*/
@@ -638,12 +744,6 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 			n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
 			buffer[n] = '\0';
 			write_play_to_main(buffer,ff_fd);
-
-			n = sprintf(buffer, "OK %d %d:%d\n", PACMAN, new_x,new_y);
-			buffer[n] = '\0';
-
-			if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
-
 		}
 	}
 
@@ -688,11 +788,6 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
-		n = sprintf(buffer, "OK %d %d:%d\n",MONSTER,x,y);
-		buffer[n] = '\0';
-
-		if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
-
 	}
 
 	/* hits enemy monster */
@@ -707,13 +802,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 
 		n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
 		buffer[n] = '\0';
-
 		write_play_to_main(buffer,ff_fd);
-
-		n = sprintf(buffer, "OK %d %d:%d\n",MONSTER,x,y);
-		buffer[n] = '\0';
-
-		if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
 
 	}
 
@@ -734,14 +823,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 
 			n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
 			buffer[n] = '\0';
-
 			write_play_to_main(buffer,ff_fd);
-
-			n = sprintf(buffer, "OK %d %d:%d\n",MONSTER,x,y);
-			buffer[n] = '\0';
-
-			if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
-
 
 		}
 
@@ -771,11 +853,6 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 			n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
 			buffer[n] = '\0';
 			write_play_to_main(buffer,ff_fd);
-
-			n = sprintf(buffer, "OK %d %d:%d\n",MONSTER,x,y);
-			buffer[n] = '\0';
-
-			if ((send(fd,buffer,BUFF_SIZE,0) 	)  == - 1) 		{func_err("send");return -1;}
 		}
 	}
 

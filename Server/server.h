@@ -12,7 +12,7 @@ int	client_setup		(int, int*);
 int	client_loop		(int, int);
 void 	client_disconnect  	(int, int);
 
-
+void 	server_disconnect	();
 int 	main_thread 		();
 int 	write_play_to_main	(char*, int);
 
