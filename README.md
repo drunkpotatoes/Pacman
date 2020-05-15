@@ -44,7 +44,6 @@ Server: CL Y:X
 
 Client: MV PIECE @ PREV-Y:PREV-X => Y:X
 
-Server: OK Y:X
 
 At any time the server or the client can disconnet sending the respective message.
 
