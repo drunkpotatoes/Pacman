@@ -69,24 +69,7 @@ void* server_listen_thread(void * arg)
 
 		printf("Received : %s\n",buffer);
 
-		if (strstr(buffer, "OK") != NULL)
-		{
-			if (sscanf(buffer,"%*s %d %d:%d",&piece,&y, &x)  != 3 ) 				{inv_format(buffer); return NULL;}
-
-			if (piece == PACMAN)
-			{
-				pacman_xy[0] = x;
-				pacman_xy[1] = y;
-			}
-
-			if (piece == MONSTER)
-			{
-				monster_xy[0] = x;
-				monster_xy[1] = y;
-			}
-		}
-
-		else if(strstr(buffer, "PT"))
+		if(strstr(buffer, "PT"))
 		{
 
 			if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] # %lx", &piece,&y,&x,&r,&g,&b, &id) != 7)		{inv_format(buffer); return NULL;}
