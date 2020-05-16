@@ -27,7 +27,7 @@ int empty_spaces(int,int,board_piece**);
 void place_piece(board_piece **,int,int,int,unsigned long,int,int,int);
 void switch_pieces(board_piece**,int,int,int,int);
 void clear_place(board_piece **, int, int);
-void clear_client(board_piece**, int, int, unsigned long, int*);
+void clear_player(board_piece**, int, int, unsigned long, int*);
 char* print_piece(board_piece **, int, int,char*);
 void free_board(int row, board_piece**);
 int is_empty(int, int, board_piece**);
@@ -36,7 +36,6 @@ int is_monster(int, int, board_piece**);
 int is_brick(int, int, board_piece**);
 int piece_is_correct(int,int,int,unsigned long,board_piece**);
 unsigned long int get_id(board_piece **, int, int);
-void get_randoom_position(board_piece**, int , int , int* , int*);
 void move_and_clear(board_piece**, int, int, int, int);
 void move(board_piece**, int, int, int, int);
 

@@ -16,7 +16,13 @@ void 	server_disconnect	();
 int 	main_thread 		();
 int 	write_play_to_main	(char*, int);
 
-int 	pacman_movement		(board_piece**, int, int, int, int, int, int, int, int, int*);
-int 	monster_movement	(board_piece**, int, int, int, int, int, int, int, int, int*);
+int 	pacman_movement		(board_piece**, int, int, int, int, int, int, 					int, int, int*);
+int 	monster_movement	(board_piece**, int, int, int, int, int, int, 					int, int, int*);
 
-int bounce(board_piece**,int,int,int,int,int,int,int*,int*);
+int 	bounce			(board_piece**,int,int,int,int,int,int,
+				int*,int*);
+
+void 	place_randoom_position	(board_piece**, int, int, int, int*, int);
+
+void 	monster_eats_pacman	(board_piece**, int, int, int, int, int, int, int*, int);
+

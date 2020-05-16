@@ -86,7 +86,6 @@ board_info init_board()
 
 
 	return bi;
-
 }
 
 
@@ -156,7 +155,7 @@ void clear_place(board_piece ** board, int row, int col)
 	board[row][col].b = 0;
 }
 
-void clear_client(board_piece** board, int rows, int cols, unsigned long id, int* coord)
+void clear_player(board_piece** board, int rows, int cols, unsigned long id, int* coord)
 {
 	int i, j;
 	int count = 0;
@@ -180,8 +179,6 @@ void clear_client(board_piece** board, int rows, int cols, unsigned long id, int
 
 	return;
 }
-
-
 
 void free_board(int row, board_piece** board)
 {
@@ -244,27 +241,6 @@ int piece_is_correct(int row, int col, int piece, unsigned long  id, board_piece
 		return 0;
 }
 
-
-void get_randoom_position(board_piece** board, int row, int col, int* i, int* j)
-{
-	int new_row, new_col;
-	srand(time(NULL));
-
-	new_row = rand()%row;
-	new_col = rand()%col;
-
-
-
-	while(!is_empty(new_row, new_col,board))
-	{
-		srand(time(NULL));
-		new_row = rand()%row;
-		new_col = rand()%col;
-	}
-
-	*i = new_row;
-	*j = new_col;
-}
 
 void move_and_clear(board_piece** board, int row, int col, int to_row, int to_col)
 {
