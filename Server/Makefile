@@ -1,10 +1,10 @@
 CFLAGS= -g -ansi -Wall -pedantic -D_GNU_SOURCE 
 
-pacman: server.o board.o utils.o sockets.o clients.o
-	gcc $(CFLAGS) -o pacman server.o board.o utils.o sockets.o clients.o -lpthread
+pacman: server.o board.o utils.o sockets.o clients.o UI_library.o
+	gcc $(CFLAGS) -o pacman server.o board.o utils.o sockets.o clients.o UI_library.o -lSDL2 -lSDL2_image -lpthread 
 
-server.o: server.c server.h board.h defs.h utils.h sockets.h clients.h
-	gcc $(CFLAGS) -c server.c -lpthread
+server.o: server.c server.h board.h defs.h utils.h sockets.h clients.h UI_library.h
+	gcc $(CFLAGS) -c server.c UI_library.c  -lSDL2 -lSDL2_image -lpthread 
 
 board.o: board.c board.h defs.h utils.h
 	gcc $(CFLAGS) -c board.c 

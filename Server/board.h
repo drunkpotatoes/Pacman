@@ -26,7 +26,7 @@ int print_board(int,int,board_piece**);
 int empty_spaces(int,int,board_piece**);
 void place_piece(board_piece **,int,int,int,unsigned long,int,int,int);
 void switch_pieces(board_piece**,int,int,int,int);
-void clear_place(board_piece **, int, int);
+void clear_board_place(board_piece **, int, int);
 void clear_player(board_piece**, int, int, unsigned long, int*);
 char* print_piece(board_piece **, int, int,char*);
 void free_board(int row, board_piece**);

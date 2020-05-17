@@ -42,7 +42,7 @@ board_info init_board()
 
 	
 
-	if ( fscanf(fid,"%d %d", &row , &col) != 2 )
+	if ( fscanf(fid,"%d %d", &col , &row) != 2 )
 	{
 		fprintf(stderr, "Error with the format of the board file %s...\nExiting...\n", BOARD_FILE);
 		exit(1);
@@ -75,7 +75,7 @@ board_info init_board()
 		}
 	}
 
-	print_board(row, col, board);
+ 	print_board(row, col, board);
 
 
 	bi.board = board;
@@ -111,6 +111,13 @@ char* print_piece(board_piece ** board, int row, int col, char* buffer)
 {
 	int n;
 
+
+	printf("piece: %c\n", board[row][col].piece);
+	printf("row: %d\n", row);
+	printf("col: %d\n", col);
+	printf("rgb: %d:%d:%d\n", board[row][col].r, board[row][col].g, board[row][col].b);
+	printf("id: %lx\n",board[row][col].user_id);
+
 	n = sprintf(buffer, "%d @ %d:%d [%d,%d,%d] # %lx", board[row][col].piece ,row ,col ,board[row][col].r, board[row][col].g, board[row][col].b, board[row][col].user_id);
 	
 	buffer[n] = '\0';
@@ -122,8 +129,6 @@ char* print_piece(board_piece ** board, int row, int col, char* buffer)
 void place_piece(board_piece ** board, int piece, int row, int col, unsigned long id, int r, int g, int b)
 {
 
-
-	/* needs write protection*/
 	board[row][col].piece = piece;
 	board[row][col].user_id = id;
 	board[row][col].r = r;
@@ -146,7 +151,7 @@ void switch_pieces(board_piece** board, int row1, int row2, int col1, int col2)
 }
 
 
-void clear_place(board_piece ** board, int row, int col)
+void clear_board_place(board_piece ** board, int row, int col)
 {
 	board[row][col].piece = EMPTY;
 	board[row][col].user_id = 0;
@@ -168,7 +173,7 @@ void clear_player(board_piece** board, int rows, int cols, unsigned long id, int
 			{
 				coord[count*2] = i;
 				coord[count*2+1] = j;
-				clear_place(board, i, j);
+				clear_board_place(board, i, j);
 
 				count++;
 			}
@@ -250,7 +255,7 @@ void move_and_clear(board_piece** board, int row, int col, int to_row, int to_co
 
 	board[to_row][to_col] = aux;
 
-	clear_place(board, row, col);
+	clear_board_place(board, row, col);
 
 	return;
 

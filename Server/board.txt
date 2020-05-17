@@ -1,11 +1,11 @@
-10 10
-     BB   
- B   B    
- B        
- BB    B  
-      BB  
-      B   
-          
-  B       
-   B  BBB 
-          
+20 10
+                    
+ B B   B BB    BBB  
+ B B      B   B     
+ B        B   B  B  
+ BB           B  B  
+        B     BB B  
+     B   B       B  
+      B          B  
+        BBB         
+              BBB   

@@ -25,7 +25,6 @@
 #include "server.h"
 
 
-
 client* clients_head;
 
 board_info status;
@@ -45,7 +44,9 @@ pthread_rwlock_t  lock_clients;
 
 pthread_mutex_t   lock_empty;
 
-int shut_down;
+
+
+volatile int shut_down;
 
 void handler (int sigtype)
 {
@@ -56,7 +57,7 @@ void handler (int sigtype)
 int main(int argc, char** argv)
 {
 
-	int 		i;
+	int 		i,x,y;
     pthread_t 	thread_id;
    	struct 		sigaction action_sig_pipe;
    	struct 		sigaction action_int;
@@ -74,11 +75,19 @@ int main(int argc, char** argv)
 	sigemptyset(&action_int.sa_mask);
 	sigaction(SIGINT, &action_int, NULL);
 
+	shut_down = 0;
+	clients_head = NULL;
 	status = init_board();
 
-	clients_head = NULL;
 
-	shut_down = 0;
+	/* creates board window*/
+	create_board_window(status.col, status.row);
+
+	/* places bricks */
+	for (x = 0; x < status.row ; x++)
+		for(y=0; y < status.col; y++)
+			if(is_brick(x,y,status.board))
+				paint_brick(y,x);
 
 
 	/* creates lock for each col*/
@@ -108,6 +117,84 @@ int main(int argc, char** argv)
 	server_disconnect();
 
 	return 0;
+}
+
+void * fruity_thread (void* arg)
+{
+	int 				fd, ff_fd, n, is_lemon;
+	char 				buffer[BUFF_SIZE];
+	int 				rgb[3];
+	long 				dif;
+	struct 	timeval 	now, start;
+	
+	memset(buffer,' ', BUFF_SIZE*sizeof(char));
+	memset(rgb,0,3*sizeof(int));
+
+	/* tries to open the fifo */
+	if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)
+	{
+		/* if it fails to open, tries to create */
+		if (mkfifo(FRUIT_FIFO_FILE, 0666)!=0)					{func_err("mkfifo"); return NULL; }
+
+		/* tries to open again */
+		if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)		{func_err("open");   return NULL; }
+	}
+
+
+	/* tries to opens fifo */
+	if ((ff_fd = open(FIFO_FILE, O_WRONLY))== -1) 		
+	{
+		/*if it fails to open, tries to create */
+		if (mkfifo(FIFO_FILE, 0666)!=0)							{func_err("mkfifo"); return NULL; }
+
+		/* tries to open again */
+		if ((ff_fd = open(FIFO_FILE, O_WRONLY))== -1)			{func_err("open");   return NULL; }
+	}
+
+	printf("PLAYS FIFO OPEN FOR WRITE\n");
+
+	printf("FRUIT FIFO OPEN FOR READ\n");
+
+	while(!shut_down)
+	{
+		if (  (n = read(fd, buffer, BUFF_SIZE) ) == -1 ) 				continue; 
+
+		if (n == 0)														continue;
+
+		if (strstr("TM", buffer))
+		{
+			if (sscanf(buffer, "%*s %ld %ld\n", &start.tv_sec , &start.tv_usec) != 2) 	{inv_format(buffer); continue;}
+			
+			/* gets current time*/
+			gettimeofday(&now,NULL);
+
+			/* calculates time passed after receiving message*/
+			dif =  (now.tv_usec - start.tv_usec) + (now.tv_sec - start.tv_sec)*1000000;
+
+			/* receveid before spawn time - should be the usual case*/
+			if (dif < FRUIT_ST_USECONDS)
+			{
+				/* sleeps through the remaining time to spawn the fruit and relases the processor*/
+				usleep(FRUIT_ST_USECONDS - dif);
+			}
+
+			/* gets random fruit*/
+			srand(time(NULL));
+			is_lemon = rand()%2;
+
+			if(is_lemon)
+			{
+				place_randoom_position(status.board, status.row, status.col,LEMON, rgb, ff_fd);
+			}
+			else
+			{
+				place_randoom_position(status.board, status.row, status.col,CHERRY, rgb, ff_fd);
+			}
+
+		}
+	}
+
+	return NULL;
 }
 
 void * accept_thread (void* arg)
@@ -363,7 +450,7 @@ int client_loop(int fd, int ff_fd)
 	char 				buffer[BUFF_SIZE];
 	struct 	timeval 	tv, start, end;
 
-	double 				diff;
+	long				diff;
 
 
 
@@ -416,7 +503,7 @@ int client_loop(int fd, int ff_fd)
 			gettimeofday(&end,NULL);
 
 			/* calculates how long the user has been inative*/
-			diff = (double) (end.tv_usec - start.tv_usec) + (double) (end.tv_sec - start.tv_sec)*1000000;
+			diff = (end.tv_usec - start.tv_usec) + (end.tv_sec - start.tv_sec)*1000000;
 
 
 			/*user inative for too long*/
@@ -456,12 +543,15 @@ int client_loop(int fd, int ff_fd)
 
 		printf("Received: %s\n", buffer);
 
-		gettimeofday(&end,NULL);
 
-		diff = (double) (end.tv_usec - start.tv_usec) + (double) (end.tv_sec - start.tv_sec)*1000000;
-
-		if(strstr(buffer, "MV") != NULL && ( diff >= USER_MAX_TIME_USECONDS ))
+		if(strstr(buffer, "MV") != NULL)
 		{
+			gettimeofday(&end,NULL);
+
+			diff = (double) (end.tv_usec - start.tv_usec) + (double) (end.tv_sec - start.tv_sec)*1000000;
+
+			if(diff < USER_MAX_TIME_USECONDS)																		continue;
+
 			if ( sscanf(buffer, "%*s %d @ %d:%d => %d:%d", &piece, &prev_x, &prev_y, &x,&y) != 5) 					{inv_format(buffer); continue;}
 
 			/* out of boundaries*/
@@ -561,11 +651,15 @@ void client_disconnect(int fd, int ff_fd)
 	} 	
 	if(coord[2] != -1 && coord[3] != -1)
 	{
-		clear_place(status.board, coord[2], coord[3]);
 		n = sprintf(buffer, "CL %d:%d", coord[2], coord[3]);
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 	}	
+
+
+	pthread_mutex_lock(&lock_empty);
+	status.empty+=4;
+	pthread_mutex_unlock(&lock_empty);
 
 
 	/* closes fifo */
@@ -592,7 +686,7 @@ int main_thread()
 {
 
 
-	int 	n, fd;
+	int 	n, fd, x, y, r, g, b, piece;
 	char 	buffer[BUFF_SIZE];
 
 
@@ -605,7 +699,6 @@ int main_thread()
 		/* tries to open again */
 		if ( (fd = open(FIFO_FILE, O_RDONLY) ) == -1)	{func_err("open");   return -1; }
 	}
-
 
 	printf("FIFO OPEN FOR READ\n");
 	
@@ -623,7 +716,31 @@ int main_thread()
 
 		printf("\n\tM: %s\n", buffer);
 
-		if (send_all_clients(clients_head,buffer,BUFF_SIZE) == -1) 	{fprintf(stderr, "No clients :(\n");continue;}
+		send_all_clients(clients_head,buffer,BUFF_SIZE);
+
+		if(strstr(buffer, "PT"))
+		{
+			
+
+			if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] #", &piece,&y,&x,&r,&g,&b) != 6)		{inv_format(buffer); continue;}
+			
+				
+				if(piece == PACMAN)						paint_pacman(x,y,r,g,b);
+			
+				else if(piece == MONSTER)				paint_monster(x,y,r,g,b);	
+
+				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);		
+
+				else /* not expected piece */ 			{fprintf(stderr,"\nInvalid Piece Received...\n"); continue;}
+		
+		}
+
+		else if(strstr(buffer,"CL"))
+		{
+			
+			if (sscanf(buffer, "%*s %d:%d", &y,&x) != 2) 								{inv_format(buffer); continue;}
+			clear_place(x,y);	
+		 }	
 
 	}
 
@@ -638,6 +755,8 @@ int main_thread()
 void server_disconnect()
 {
 	int i;
+
+	close_board_windows();
 
 	for (i =0; i < status.col ; i++) 	pthread_mutex_lock(&lock_col[i]);
 	free_board(status.row, status.board);
@@ -657,8 +776,6 @@ void server_disconnect()
 	
 	if (pthread_rwlock_destroy(&lock_clients)) 				func_err("pthread_mutex_destroy");
 	if (pthread_mutex_destroy(&lock_empty)) 				func_err("pthread_mutex_destroy");
-
-	
 }
 
 
@@ -807,7 +924,7 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		/* enemy monster*/
 		else
 		{
-			monster_eats_pacman(board, row, col, x, y, prev_x, prev_y, rgb, ff_fd);
+			monster_eats_pacman(board, row, col, x, y, prev_x, prev_y,1, ff_fd);
 		}
 	}
 
@@ -997,7 +1114,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		/* enemy pacman*/
 		else
 		{
-			monster_eats_pacman(board, row, col, x, y, prev_x, prev_y, rgb, ff_fd);
+			monster_eats_pacman(board, row, col, x, y, prev_x, prev_y, 0, ff_fd);
 		}
 	}
 
@@ -1039,7 +1156,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 
 
 int bounce(board_piece** board, int row, int col,int x, int y, int prev_x, int prev_y, int *new_x, int*new_y)
-{	
+{
 
 	/*horizontal*/
 	if (prev_x == x)
@@ -1169,7 +1286,7 @@ void place_randoom_position(board_piece** board, int row, int col, int piece, in
 	}
 }
 
-void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, int prev_x, int prev_y, int* rgb, int ff_fd)
+void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, int prev_x, int prev_y, int suicidal, int ff_fd)
 {
 
 	int 	new_row, new_col, n , last_col;
@@ -1185,6 +1302,7 @@ void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, in
 
 	while(1)
 	{
+		print_board(status.row,status.col,status.board);
 		/* tries to lock col*/
 		if (!pthread_mutex_trylock(&lock_col[new_col]))
 		{
@@ -1200,17 +1318,30 @@ void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, in
 				if(is_empty(new_row, new_col,board))
 				{
 
-					/* moves pacman */
-					move(board,x, y, new_row, new_col);
+					/* pacman suicides into monster */
+					if (suicidal)
+					{
+						/* moves pacman */
+						move_and_clear(board, prev_x, prev_y, new_row, new_col);
+					}
 
-					/* moves monster and clears position*/
-					move_and_clear(board,prev_x, prev_y, x, y);
+					/* monster hunts pacman*/
+					else 
+					{
+						/* moves pacman */
+						move(board,x, y, new_row, new_col);
 
-					n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d] # %lx\n", MONSTER, x,y, rgb[0], rgb[1], rgb[2], pthread_self());
+						/* moves monster and clears position*/
+						move_and_clear(board,prev_x, prev_y, x, y);
+						
+					}
+					
+
+					n = sprintf(buffer, "PT %s\n" , print_piece(board, x, y, buffer_aux));
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 
-					n = sprintf(buffer, "PT %s", print_piece(board, new_col, new_row,buffer_aux));
+					n = sprintf(buffer, "PT %s\n", print_piece(board, new_row, new_col,buffer_aux));
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 

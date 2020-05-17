@@ -3,11 +3,15 @@
 #define MONSTER 'M'
 #define BRICK 'B'
 #define EMPTY ' '
+#define LEMON 'L'
+#define CHERRY 'C'
 #define BUFF_SIZE 100
 #define PIECE_SIZE 90
 
+
 #define SERVER_PORT "60000"
-#define SERVER_IP "127.0.0.1"
+
+#define FRUIT_ST_USECONDS 2000000
 
 #define SECONDS_TIMEOUT 5
 #define USECONDS_TIMEOUT 0
@@ -17,3 +21,4 @@
 
 #define BOARD_FILE "board.txt"
 #define FIFO_FILE  "pac_fifo"
+#define FRUIT_FIFO_FILE  "fruit_fifo"
