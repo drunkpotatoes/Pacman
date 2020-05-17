@@ -378,7 +378,7 @@ int server_setup(int * rfd)
 			if(sscanf(buffer, "%*s %d:%d\n", &row, &col) != 2) 	{inv_format(buffer); return -1;}
 
 			/* print board of size row x col */
-			create_board_window(row, col);
+			create_board_window(col, row);
 
 			while(1)
 			{
