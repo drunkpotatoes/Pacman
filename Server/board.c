@@ -75,15 +75,14 @@ board_info init_board()
 		}
 	}
 
- 	print_board(row, col, board);
-
-
 	bi.board = board;
 	bi.row = row;
 	bi.col = col;
 
 	bi.empty = empty_spaces(row,col,board);
 
+	bi.max_fruits =0;
+	bi.cur_fruits =0;
 
 	return bi;
 }
@@ -110,13 +109,6 @@ int empty_spaces(int row, int col, board_piece** board)
 char* print_piece(board_piece ** board, int row, int col, char* buffer)
 {
 	int n;
-
-
-	printf("piece: %c\n", board[row][col].piece);
-	printf("row: %d\n", row);
-	printf("col: %d\n", col);
-	printf("rgb: %d:%d:%d\n", board[row][col].r, board[row][col].g, board[row][col].b);
-	printf("id: %lx\n",board[row][col].user_id);
 
 	n = sprintf(buffer, "%d @ %d:%d [%d,%d,%d] # %lx", board[row][col].piece ,row ,col ,board[row][col].r, board[row][col].g, board[row][col].b, board[row][col].user_id);
 	
@@ -169,7 +161,7 @@ void clear_player(board_piece** board, int rows, int cols, unsigned long id, int
 	{
 		for(j = 0; j < cols ; j++)
 		{
-			if(board[i][j].user_id == id)
+			if(board[i][j].user_id == id && (board[i][j].piece == PACMAN || board[i][j].piece == MONSTER || board[i][j].piece == POWER_PACMAN))
 			{
 				coord[count*2] = i;
 				coord[count*2+1] = j;
@@ -232,6 +224,13 @@ int is_brick(int row, int col, board_piece** board)
 		return 0;
 }
 
+int is_any_fruit(int row, int col, board_piece** board)
+{
+	if( (board[row][col].piece == LEMON ) || (board[row][col].piece == CHERRY))
+		return 1;
+	else
+		return 0;
+}
 
 unsigned long int get_id(board_piece ** board, int row, int col)
 {

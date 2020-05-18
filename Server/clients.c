@@ -271,3 +271,29 @@ int send_all_clients(client* head, char* msg, int msg_size)
 
     return 0;
 }
+
+
+int number_of_clients(client* head)
+{
+
+	int i;
+	client* aux;
+
+	i = 0;
+
+	if(head == NULL)
+	{
+		return 0;
+	}
+
+	aux = head;
+
+    while (aux != NULL) 
+    {
+    	/* increments number of clients*/
+        i++;
+		aux = aux->next;
+    }
+
+    return i;
+}

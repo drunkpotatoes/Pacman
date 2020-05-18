@@ -9,7 +9,6 @@ typedef struct board_piece{
 	int b;
 
 }board_piece;
-	
 
 typedef struct board_infos{
 
@@ -17,9 +16,10 @@ typedef struct board_infos{
     int   row;
     int   col;
     int   empty;
+    int   max_fruits;
+    int   cur_fruits;
 
 }board_info;
-
 
 board_info init_board();
 int print_board(int,int,board_piece**);
@@ -34,6 +34,7 @@ int is_empty(int, int, board_piece**);
 int is_pacman(int, int, board_piece**);
 int is_monster(int, int, board_piece**);
 int is_brick(int, int, board_piece**);
+int is_any_fruit(int,int,board_piece**);
 int piece_is_correct(int,int,int,unsigned long,board_piece**);
 unsigned long int get_id(board_piece **, int, int);
 void move_and_clear(board_piece**, int, int, int, int);

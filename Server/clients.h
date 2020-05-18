@@ -29,3 +29,4 @@ void remove_client(client**, unsigned long);
 void get_pac_rgb(client*, unsigned long,int*, int*, int*);
 void get_mon_rgb(client*, unsigned long, int*, int*, int*);
 int send_all_clients(client*, char*, int);
+int number_of_clients(client*);

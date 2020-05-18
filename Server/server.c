@@ -29,23 +29,31 @@ client* clients_head;
 
 board_info status;
 
-/*typedef struct board_infos{
+/*
+typedef struct board_infos{
 
     board_piece** board;
     int   row;
     int   col;
     int   empty;
+    int   max_fruits;
+    int   cur_fruits;
 
-}board_info; */
+}board_info;
+*/
 
 pthread_mutex_t * lock_col;
 
-pthread_rwlock_t  lock_clients;
-
 pthread_mutex_t   lock_empty;
 
+pthread_mutex_t   lock_fruits;
+
+pthread_mutex_t   lock_cur;
+
+pthread_rwlock_t  lock_clients;
 
 
+volatile int debug;
 volatile int shut_down;
 
 void handler (int sigtype)
@@ -58,7 +66,7 @@ int main(int argc, char** argv)
 {
 
 	int 		i,x,y;
-    pthread_t 	thread_id;
+    pthread_t 	accept_thread_id, fruits_thread_id;
    	struct 		sigaction action_sig_pipe;
    	struct 		sigaction action_int;
 
@@ -76,6 +84,7 @@ int main(int argc, char** argv)
 	sigaction(SIGINT, &action_int, NULL);
 
 	shut_down = 0;
+	debug = 1;
 	clients_head = NULL;
 	status = init_board();
 
@@ -96,32 +105,115 @@ int main(int argc, char** argv)
 	/* initializes read-write lock for clients*/
 	if (pthread_rwlock_init(&lock_clients,NULL) != 0)								{func_err("pthread_rwlock_init"); exit(1);}
 
-	/* initializes lock for fifo*/
+	/* initializes lock for empty places*/
 	if (pthread_mutex_init(&lock_empty,NULL) != 0)									{func_err("pthread_mutex_init"); exit(1);}
+
+	/* initializes lock for max fruits*/
+	if (pthread_mutex_init(&lock_fruits,NULL) != 0)									{func_err("pthread_mutex_init"); exit(1);}
 
 	/* initializes lock for each col*/
 	for (i = 0; i < status.col ; i++)
 		if (pthread_mutex_init(&lock_col[i],NULL) != 0)								{func_err("pthread_mutex_init"); exit(1);}
 
 
-	/* creates thread to accept clients*/
-	if (pthread_create(&thread_id , NULL, accept_thread, NULL)) 					{func_err("pthread_create"); exit(1);}
+	if(pthread_mutex_init(&lock_cur,NULL) != 0)										{func_err("pthread_mutex_init"); exit(1);}						
 
-	if (pthread_detach(thread_id))													{func_err("pthread_detach"); exit(1);}
+	/* creates thread to accept clients*/
+	if (pthread_create(&accept_thread_id , NULL, accept_thread, NULL)) 				{func_err("pthread_create"); exit(1);}
+
+	/* creates thread to handle fruits*/
+	if (pthread_create(&fruits_thread_id , NULL, fruity_thread, NULL)) 				{func_err("pthread_create"); exit(1);}
+
+
 	/* thread to send information to all clients*/
 	main_thread();
 
 	/* waits for all threads to clean up*/
-	sleep(2);
+	sleep(1);
 
 	server_disconnect();
+
+	exit(0);
+}
+
+
+int main_thread()
+{
+
+
+	int 	n, fd, x, y, r, g, b, piece;
+	char 	buffer[BUFF_SIZE];
+
+
+	/* tries to open the fifo */
+	if ( (fd = open(FIFO_FILE, O_RDONLY) ) == -1)
+	{
+		/* if it fails to open, tries to create */
+		if (mkfifo(FIFO_FILE, 0666)!=0)					{func_err("mkfifo"); return -1; }
+
+		/* tries to open again */
+		if ( (fd = open(FIFO_FILE, O_RDONLY) ) == -1)	{func_err("open");   return -1; }
+	}
+
+	/*debug_print("MAIN" ,"Opened Plays FIFO for Read", pthread_self(),2,debug);*/
+	
+
+	/* main cycle */
+	while(!shut_down)
+	{
+
+		if (  (n = read(fd, buffer, BUFF_SIZE) ) == -1 ) 				continue; 
+
+		if (n == 0)														continue;
+
+
+		buffer[n] = '\0';
+
+		debug_print("MAIN" ,buffer, pthread_self(),0,debug);
+
+		send_all_clients(clients_head,buffer,BUFF_SIZE);
+
+		if(strstr(buffer, "PT"))
+		{
+			
+
+			if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] #", &piece,&y,&x,&r,&g,&b) != 6)		{inv_format(buffer); continue;}
+			
+				
+				if     (piece == PACMAN)				paint_pacman(x,y,r,g,b);
+			
+				else if(piece == MONSTER)				paint_monster(x,y,r,g,b);	
+
+				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);
+
+				else if(piece == CHERRY)				paint_cherry(x,y);
+
+				else if(piece == LEMON)					paint_lemon(x,y);
+
+				else /* not expected piece */ 			{inv_piece(piece); continue;}
+		
+		}
+
+		else if(strstr(buffer,"CL"))
+		{
+			
+			if (sscanf(buffer, "%*s %d:%d", &y,&x) != 2) 								{inv_format(buffer); continue;}
+			clear_place(x,y);	
+		 }	
+
+	}
+
+
+	sleep(1);
+	close(fd);
 
 	return 0;
 }
 
+
 void * fruity_thread (void* arg)
 {
-	int 				fd, ff_fd, n, is_lemon;
+	int 				fd, ff_fd, n,lemon;
 	char 				buffer[BUFF_SIZE];
 	int 				rgb[3];
 	long 				dif;
@@ -140,6 +232,7 @@ void * fruity_thread (void* arg)
 		if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)		{func_err("open");   return NULL; }
 	}
 
+	debug_print("FRUIT" ,"Opened Fruits FIFO for Read", pthread_self(),2,debug);
 
 	/* tries to opens fifo */
 	if ((ff_fd = open(FIFO_FILE, O_WRONLY))== -1) 		
@@ -151,9 +244,8 @@ void * fruity_thread (void* arg)
 		if ((ff_fd = open(FIFO_FILE, O_WRONLY))== -1)			{func_err("open");   return NULL; }
 	}
 
-	printf("PLAYS FIFO OPEN FOR WRITE\n");
+	debug_print("FRUIT" ,"Opened Plays FIFO for Write", pthread_self(),2,debug);
 
-	printf("FRUIT FIFO OPEN FOR READ\n");
 
 	while(!shut_down)
 	{
@@ -161,10 +253,27 @@ void * fruity_thread (void* arg)
 
 		if (n == 0)														continue;
 
-		if (strstr("TM", buffer))
+		debug_print("FRUIT" ,buffer, pthread_self(),0,debug);
+
+		if (strstr(buffer,"TM") != NULL)
 		{
 			if (sscanf(buffer, "%*s %ld %ld\n", &start.tv_sec , &start.tv_usec) != 2) 	{inv_format(buffer); continue;}
 			
+			/* if curr fruits are already the maxed value, it will ignore fruit spawn requests*/
+
+			pthread_mutex_lock(&lock_fruits);
+			pthread_mutex_lock(&lock_cur);
+
+			if (status.cur_fruits >= status.max_fruits) 								
+			{
+				pthread_mutex_unlock(&lock_fruits);
+				pthread_mutex_unlock(&lock_cur); 
+				continue;
+			}
+
+			pthread_mutex_unlock(&lock_cur);
+			pthread_mutex_unlock(&lock_fruits);
+
 			/* gets current time*/
 			gettimeofday(&now,NULL);
 
@@ -180,9 +289,9 @@ void * fruity_thread (void* arg)
 
 			/* gets random fruit*/
 			srand(time(NULL));
-			is_lemon = rand()%2;
+			lemon = rand()%2;
 
-			if(is_lemon)
+			if(lemon)
 			{
 				place_randoom_position(status.board, status.row, status.col,LEMON, rgb, ff_fd);
 			}
@@ -191,11 +300,18 @@ void * fruity_thread (void* arg)
 				place_randoom_position(status.board, status.row, status.col,CHERRY, rgb, ff_fd);
 			}
 
+			pthread_mutex_lock(&lock_cur);
+			status.cur_fruits++;
+			pthread_mutex_unlock(&lock_cur);
+
 		}
+
+		else 													{inv_msg(buffer); continue;}
 	}
 
 	return NULL;
 }
+
 
 void * accept_thread (void* arg)
 {
@@ -229,7 +345,8 @@ void * accept_thread (void* arg)
 		exit(1);
 	}
 
-	/* increments port number*/
+	
+	debug_print("ACCEPT", "Accepting Connections from Clients...", pthread_self(), 2, debug);
 
 	while(!shut_down)
 	{
@@ -246,16 +363,13 @@ void * accept_thread (void* arg)
 		/* cleans buffer */
 		buffer[n] = '\0';
 
-
-		/* prints message */
-		printf("%s\n", buffer);
+		debug_print("ACCEPT" ,buffer, pthread_self(),0,debug);
 
 		/* connection request*/	
 		if(strstr(buffer, "RQ") != NULL)
 		{
 			/* creates thread to handle client */
 			if (pthread_create(&thread_id , NULL, client_thread, (void*) &newfd)) 	func_err("pthread_create");
-			if (pthread_detach(thread_id))											func_err("pthread_detach");
 
 		}
 	}
@@ -270,37 +384,57 @@ void * accept_thread (void* arg)
 
 void * client_thread (void* arg)
 {
-	int  	fd, ff_fd;
+	int  	n, fd, ff_fd, ft_fd;
+	char 	buffer[BUFF_SIZE];
 
 	fd = *((int*) arg);
 
+	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
 
-	/* initializes fifo file with -1*/
+	/* initializes fifo files with -1*/
 	ff_fd = -1;
+	ft_fd = -1;
 
 
-	if (client_setup(fd,&ff_fd) == -1) 			{client_disconnect(fd,ff_fd); return NULL;}
+	if (client_setup(fd,&ff_fd, &ft_fd) == -1) 				{client_disconnect(fd,ff_fd,ft_fd); return NULL;}
 
-	if (client_loop(fd,ff_fd) == -1)			{client_disconnect(fd,ff_fd); return NULL;}
+	if (client_loop(fd,ff_fd, ft_fd) == -1)					{client_disconnect(fd,ff_fd,ft_fd); return NULL;}
 
-	client_disconnect(fd,ff_fd);
+
+	/* sends dc message*/
+	n = sprintf(buffer, "DC\n");
+	buffer[n] = '\0';
+	send(fd,buffer, BUFF_SIZE,0);
+
+	debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
+
+
+	/* closes opened files*/
+	close(fd); 
+	close(ff_fd);
+	close(ft_fd);
+	
 
 	return NULL;
 }
 
-int client_setup(int fd, int* pff_fd)
+
+int client_setup(int fd, int* pff_fd, int* pft_fd)
 {	
 
-	int 	n,i,j,num_pieces;
+	int 	n,i,j,num_pieces, first_client;
 
 	int 	pac_rgb[3];
 	int 	mon_rgb[3];
+
+	int 	frt_rgb[3];
 	
 
 	char 	buffer[BUFF_SIZE];
 	char 	buffer_aux[PIECE_SIZE];
 
 	memset(buffer,' ',BUFF_SIZE*sizeof(char));
+	memset(frt_rgb, 0 , 3*sizeof(int));
 
 
 	/* tries to opens fifo */
@@ -313,7 +447,19 @@ int client_setup(int fd, int* pff_fd)
 		if ((*pff_fd = open(FIFO_FILE, O_WRONLY))== -1)		{func_err("open");   return -1; }
 	}
 
-	printf("FIFO OPEN FOR WRITE\n");
+	debug_print("CLIENT" ,"Opened Plays FIFO for Write", pthread_self(),2,debug);
+
+	/* tries to opens fifo */
+	if ((*pft_fd = open(FRUIT_FIFO_FILE, O_WRONLY))== -1) 		
+	{	
+		/*if it fails to open, tries to create */
+		if (mkfifo(FRUIT_FIFO_FILE, 0666)!=0)						{func_err("mkfifo"); return -1; }
+		
+		/* tries to open again */
+		if ((*pft_fd = open(FRUIT_FIFO_FILE, O_WRONLY))== -1)		{func_err("open");   return -1; }
+	}
+
+	debug_print("CLIENT" ,"Opened Fruits FIFO for Write", pthread_self(),2,debug);
 
 	pthread_mutex_lock(&lock_empty);
 
@@ -323,14 +469,35 @@ int client_setup(int fd, int* pff_fd)
 
 		buffer[n] = '\0';
 
-		printf("%s\n", buffer);
+		if (send(fd,buffer,BUFF_SIZE,0) == -1) 			{func_err("send"); pthread_mutex_unlock(&lock_empty); return -1;}
 
-		if (send(fd,buffer,BUFF_SIZE,0) == -1) 			{func_err("send"); return -1;}
+		debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 
-		/* decrements by 4 for each user - 2 for pacman and monters, 2 for the extra fruits */
-		status.empty -= 4;
+		pthread_rwlock_rdlock(&lock_clients);
 
-		pthread_mutex_unlock(&lock_empty);
+		if(number_of_clients(clients_head) == 0)
+		{
+			/* decrements by 2 for first user -  for pacman and monters */
+			status.empty -= 2;
+			pthread_mutex_unlock(&lock_empty);
+			pthread_rwlock_unlock(&lock_clients);
+			first_client = 1;
+		}
+		else
+		{
+			/* decrements by 4 for each user - 2 for pacman and monters, 2 for the extra fruits */
+			status.empty -= 4;
+			pthread_mutex_unlock(&lock_empty);
+			pthread_rwlock_unlock(&lock_clients);
+
+			/* updates max number of fruits*/
+			pthread_mutex_lock(&lock_fruits);
+			status.max_fruits +=2;
+			pthread_mutex_unlock(&lock_fruits);
+
+			first_client = 0;
+		}
+		
 
 	}
 
@@ -342,7 +509,7 @@ int client_setup(int fd, int* pff_fd)
 		n = sprintf(buffer,"W8\n");
 		buffer[n] = '\0';
 
-		printf("%s\n", buffer);
+		debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 
 		if (send(fd,buffer,BUFF_SIZE,0) == -1 ) 		{func_err("send"); return -1;}
 
@@ -353,7 +520,7 @@ int client_setup(int fd, int* pff_fd)
 	if ( (n = recv(fd, buffer, BUFF_SIZE, 0) )== -1) 	{func_err("recv"); return -1;}
 	buffer[n] = '\0';
 
-	printf("%s\n", buffer);
+	debug_print("CLIENT" ,buffer, pthread_self(),0,debug);
 
 	if (strstr(buffer, "CC") == NULL) 					{inv_msg(buffer); return -1;}
 
@@ -366,6 +533,11 @@ int client_setup(int fd, int* pff_fd)
 	place_randoom_position(status.board, status.row, status.col, PACMAN,  pac_rgb, *pff_fd);
 	place_randoom_position(status.board, status.row, status.col, MONSTER,  mon_rgb, *pff_fd);
 
+
+	/* places the fruits for a not first client*/
+	if(!first_client) 				write_fruit(*pft_fd, *pff_fd, 1);
+
+
 	/* non empty pieces */
 
 	num_pieces = status.row*status.col - status.empty;
@@ -373,7 +545,7 @@ int client_setup(int fd, int* pff_fd)
 	n = sprintf(buffer, "MP %d:%d\n", status.row, status.col);
 	buffer[n] = '\0';
 
-	printf("%s\n", buffer);
+	debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 
 	if (send(fd,buffer,BUFF_SIZE,0) == -1)				{func_err("send"); return -1;}
 
@@ -396,14 +568,12 @@ int client_setup(int fd, int* pff_fd)
 		{
 			if(is_empty(i,j,status.board)) 				continue;
 
-			
-
 			n = sprintf(buffer, "PT %s\n", print_piece(status.board,i,j,buffer_aux));
 			buffer[n] = '\0';
 
 			if (send(fd,buffer,BUFF_SIZE, 0) == -1) 	{func_err("send"); return -1;}
 
-			printf("%s\n",buffer);
+			debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 			num_pieces++;
 		}
 	}
@@ -415,7 +585,7 @@ int client_setup(int fd, int* pff_fd)
 
 	if (send(fd,buffer,BUFF_SIZE, 0) == -1) 			{func_err("send"); return -1;}
 
-	printf("%s\n",buffer);
+	debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 
 
 	/* waits for client to answer*/
@@ -425,24 +595,20 @@ int client_setup(int fd, int* pff_fd)
 	/* cleans buffer */
 	buffer[n] = '\0';
 
-
-	/* prints message */
-	printf("%s\n", buffer);
+	debug_print("CLIENT" ,buffer, pthread_self(),0,debug);
 
 	/* connection request*/	
 	if(strstr(buffer, "OK") == NULL) 					{inv_msg(buffer); return -1;}
 
 
 	/* setup completed */
-	print_clients(clients_head);
-	print_board(status.row, status.col,status.board);
-
+	debug_print("CLIENT" ,"Client Setup Completed...", pthread_self(),2,debug);
 
 	return 0;
 }
 
 
-int client_loop(int fd, int ff_fd)
+int client_loop(int fd, int ff_fd, int ft_fd)
 {
 
 	int 				n, piece, prev_x, prev_y, x, y, new_y, new_x;
@@ -498,6 +664,7 @@ int client_loop(int fd, int ff_fd)
 			/* if -1, client disconnected*/
 			if (send(fd,buffer, BUFF_SIZE,0)  == -1) 				return -1;
 
+			/*debug_print("CLIENT" ,buffer, pthread_self(),1,debug);*/
 
 			/* gets current time*/
 			gettimeofday(&end,NULL);
@@ -520,11 +687,11 @@ int client_loop(int fd, int ff_fd)
 				if(coord[0] != -1 && coord[1] != -1 && coord[2] != -1 && coord[3] != -1)
 				{
 					
-					n = sprintf(buffer, "CL %d:%d", coord[2], coord[3]);
+					n = sprintf(buffer, "CL %d:%d\n", coord[2], coord[3]);
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 
-					n = sprintf(buffer, "CL %d:%d", coord[0], coord[1]);
+					n = sprintf(buffer, "CL %d:%d\n", coord[0], coord[1]);
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 
@@ -541,7 +708,7 @@ int client_loop(int fd, int ff_fd)
 
 		buffer[n] = '\0';
 
-		printf("Received: %s\n", buffer);
+		debug_print("CLIENT" ,buffer, pthread_self(),0,debug);
 
 
 		if(strstr(buffer, "MV") != NULL)
@@ -572,7 +739,7 @@ int client_loop(int fd, int ff_fd)
 			/* pacman movement */
 			if (piece == PACMAN) 	
 			{
-				if (!pacman_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,fd, pac_rgb))  	continue;
+				if (!pacman_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, pac_rgb))  	continue;
 
 				/*updates clock*/
 				gettimeofday(&start,NULL);
@@ -583,7 +750,7 @@ int client_loop(int fd, int ff_fd)
 			else if ( piece == MONSTER)	
 			{
 
-				if (!monster_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,fd, mon_rgb)) 	continue;
+				if (!monster_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, mon_rgb)) 	continue;
 
 				/*updates clock*/
 				gettimeofday(&start,NULL);
@@ -600,11 +767,11 @@ int client_loop(int fd, int ff_fd)
 	}
 
 
-	return -1;
+	return 0;
 }
 
 
-void client_disconnect(int fd, int ff_fd)
+void client_disconnect(int fd, int ff_fd, int ft_fd)
 {
 	int 	n;
 	char 	buffer[BUFF_SIZE];
@@ -616,16 +783,7 @@ void client_disconnect(int fd, int ff_fd)
 	
 
 	/* closes socket */
-	if (fd != -1 ) 			
-	{	
-		/* sends dc message*/
-		n = sprintf(buffer, "DC\n");
-		buffer[n] = '\0';
-		send(fd,buffer, BUFF_SIZE,0);
-
-		close(fd); 	
-	}
-
+	if (fd != -1 ) 			close(fd);	
 
 	pthread_rwlock_wrlock(&lock_clients);
 
@@ -639,19 +797,19 @@ void client_disconnect(int fd, int ff_fd)
 
 	/* cleans pacman and monster from board */
 	clear_player(status.board, status.row, status.col, (unsigned long) pthread_self(), coord);
-
+	
 	for (n = 0; n < status.col ; n++) 			pthread_mutex_unlock(&lock_col[n]);
 
 	if(coord[0] != -1 && coord[1] != -1)
 	{
 		
-		n = sprintf(buffer, "CL %d:%d", coord[0], coord[1]);
+		n = sprintf(buffer, "CL %d:%d\n", coord[0], coord[1]);
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 	} 	
 	if(coord[2] != -1 && coord[3] != -1)
 	{
-		n = sprintf(buffer, "CL %d:%d", coord[2], coord[3]);
+		n = sprintf(buffer, "CL %d:%d\n", coord[2], coord[3]);
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 	}	
@@ -662,8 +820,16 @@ void client_disconnect(int fd, int ff_fd)
 	pthread_mutex_unlock(&lock_empty);
 
 
-	/* closes fifo */
-	if (fd != -1 ) 		close(ff_fd);
+	pthread_mutex_lock(&lock_fruits);
+	if (status.max_fruits != 0)
+		status.max_fruits-=2;
+	pthread_mutex_unlock(&lock_fruits);
+
+
+	/* closes fifos */
+	if(ff_fd != -1 ) 	close(ff_fd);
+
+	if(ft_fd != -1) 	close(ft_fd);
 }
 
 
@@ -673,7 +839,7 @@ int write_play_to_main(char* play, int fd)
 
 	if (play == NULL)									return -1;
 	
-	printf("T: %s\n", play);
+	debug_print("CLIENT" ,play, pthread_self(),1,debug);
 
 	/* writes to fifo*/
 	if (write(fd, play, BUFF_SIZE) == -1) 				{func_err("write"); return -1;}
@@ -682,74 +848,62 @@ int write_play_to_main(char* play, int fd)
 }
 
 
-int main_thread()
+int write_fruit(int ft_fd, int fd, int now)
 {
+	
+	int i, n, lemon;
 
+	int 	rgb[3];
 
-	int 	n, fd, x, y, r, g, b, piece;
-	char 	buffer[BUFF_SIZE];
+	char buffer[BUFF_SIZE];
 
+	struct timeval tv;
 
-	/* tries to open the fifo */
-	if ( (fd = open(FIFO_FILE, O_RDONLY) ) == -1)
+	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
+	memset(rgb, 0, 3*sizeof(int));
+
+	if (now)
 	{
-		/* if it fails to open, tries to create */
-		if (mkfifo(FIFO_FILE, 0666)!=0)					{func_err("mkfifo"); return -1; }
+		
+		for(i = 0; i < FRUITS_PER_PLAYER; i++)
+		{
+			/* gets random fruit*/
+			srand(time(NULL));
+			lemon = rand()%2;
 
-		/* tries to open again */
-		if ( (fd = open(FIFO_FILE, O_RDONLY) ) == -1)	{func_err("open");   return -1; }
+			if(lemon)
+			{
+				place_randoom_position(status.board, status.row, status.col,LEMON, rgb, fd);
+			}
+			else
+			{
+				place_randoom_position(status.board, status.row, status.col,CHERRY, rgb, fd);
+			}
+		}
+	
+		pthread_mutex_lock(&lock_cur);
+		status.cur_fruits+=FRUITS_PER_PLAYER;
+		pthread_mutex_unlock(&lock_cur);
 	}
 
-	printf("FIFO OPEN FOR READ\n");
-	
-
-	/* main cycle */
-	while(!shut_down)
-	{
-
-		if (  (n = read(fd, buffer, BUFF_SIZE) ) == -1 ) 				continue; 
-
-		if (n == 0)														continue;
-
-
+	else
+	{	
+		gettimeofday(&tv,NULL);
+		/* sends curr time to fruit thread */
+		n = sprintf(buffer,"TM %ld %ld\n", tv.tv_sec , tv.tv_usec);
 		buffer[n] = '\0';
 
-		printf("\n\tM: %s\n", buffer);
+		/* writes to fifo*/
+		if (write(ft_fd, buffer, BUFF_SIZE) == -1) 				{func_err("write"); return -1;}
 
-		send_all_clients(clients_head,buffer,BUFF_SIZE);
-
-		if(strstr(buffer, "PT"))
-		{
-			
-
-			if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] #", &piece,&y,&x,&r,&g,&b) != 6)		{inv_format(buffer); continue;}
-			
-				
-				if(piece == PACMAN)						paint_pacman(x,y,r,g,b);
-			
-				else if(piece == MONSTER)				paint_monster(x,y,r,g,b);	
-
-				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);		
-
-				else /* not expected piece */ 			{fprintf(stderr,"\nInvalid Piece Received...\n"); continue;}
-		
-		}
-
-		else if(strstr(buffer,"CL"))
-		{
-			
-			if (sscanf(buffer, "%*s %d:%d", &y,&x) != 2) 								{inv_format(buffer); continue;}
-			clear_place(x,y);	
-		 }	
-
+		debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 	}
 
-
-	sleep(1);
-	close(fd);
-
+	
+	
 	return 0;
 }
+
 
 
 void server_disconnect()
@@ -776,10 +930,12 @@ void server_disconnect()
 	
 	if (pthread_rwlock_destroy(&lock_clients)) 				func_err("pthread_mutex_destroy");
 	if (pthread_mutex_destroy(&lock_empty)) 				func_err("pthread_mutex_destroy");
+	if (pthread_mutex_destroy(&lock_fruits)) 				func_err("pthread_mutex_destroy");
+	if (pthread_mutex_destroy(&lock_cur)) 					func_err("pthread_mutex_destroy");
 }
 
 
-int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int fd, int* rgb)
+int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
 	int 	n, new_x, new_y;
 
@@ -895,7 +1051,7 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
-		n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
+		n = sprintf(buffer, "PT %s\n", print_piece(board, prev_x, prev_y,buffer_aux));
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
@@ -915,7 +1071,7 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 			buffer[n] = '\0';
 			write_play_to_main(buffer,ff_fd);
 
-			n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
+			n = sprintf(buffer, "PT %s\n", print_piece(board, prev_x, prev_y,buffer_aux));
 			buffer[n] = '\0';
 			write_play_to_main(buffer,ff_fd);
 
@@ -928,9 +1084,33 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		}
 	}
 
-	else
+	else if (is_any_fruit(x,y,board))
 	{
-		printf("Weird piece\n");
+
+		move_and_clear(board,prev_x, prev_y, x, y);
+
+		n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d] # %lx\n", PACMAN, x,y, rgb[0], rgb[1], rgb[2], pthread_self());
+		buffer[n] = '\0';
+		write_play_to_main(buffer,ff_fd);
+
+		n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
+		buffer[n] = '\0';
+		write_play_to_main(buffer,ff_fd);
+
+		/*updates score*/
+
+		/*transform pacman in super pacman*/
+
+
+		pthread_mutex_lock(&lock_cur);
+		status.cur_fruits--;
+		pthread_mutex_unlock(&lock_cur);
+
+		/* writes fruit*/
+		write_fruit(ft_fd, ff_fd, 0);
+	}
+	else	/* invalid piece */
+	{
 
 		/* horizontal */
 		if (prev_x == x)
@@ -965,7 +1145,7 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 	return 1;
 }
 
-int monster_movement(board_piece** board, int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int fd, int* rgb)
+int monster_movement(board_piece** board, int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
 	int 	n, new_x, new_y;
 
@@ -1068,7 +1248,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
-		n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+		n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
@@ -1084,7 +1264,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
-		n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
+		n = sprintf(buffer, "PT %s\n", print_piece(board, prev_x, prev_y,buffer_aux));
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
 
@@ -1105,7 +1285,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 			write_play_to_main(buffer,ff_fd);
 
 
-			n = sprintf(buffer, "PT %s", print_piece(board, prev_x, prev_y,buffer_aux));
+			n = sprintf(buffer, "PT %s\n", print_piece(board, prev_x, prev_y,buffer_aux));
 			buffer[n] = '\0';
 			write_play_to_main(buffer,ff_fd);
 
@@ -1118,9 +1298,31 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		}
 	}
 
-	else
+	else if (is_any_fruit(x,y,board))
 	{
-		printf("Weird piece\n");
+		move_and_clear(board,prev_x, prev_y, x, y);
+
+		n = sprintf(buffer, "PT %d @ %d:%d [%d,%d,%d] # %lx\n", MONSTER, x,y, rgb[0], rgb[1], rgb[2], pthread_self());
+		buffer[n] = '\0';
+		write_play_to_main(buffer,ff_fd);
+
+		n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
+		buffer[n] = '\0';
+		write_play_to_main(buffer,ff_fd);
+
+		/* does nothing */
+
+		pthread_mutex_lock(&lock_cur);
+		status.cur_fruits--;
+		pthread_mutex_unlock(&lock_cur);
+
+		/* writes fruit*/
+		write_fruit(ft_fd, ff_fd, 0);
+	}
+
+	else	/* invalid piece */
+	{
+		
 
 		/* horizontal */
 		if (prev_x == x)
@@ -1302,7 +1504,6 @@ void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, in
 
 	while(1)
 	{
-		print_board(status.row,status.col,status.board);
 		/* tries to lock col*/
 		if (!pthread_mutex_trylock(&lock_col[new_col]))
 		{
@@ -1345,7 +1546,7 @@ void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, in
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 
-					n = sprintf(buffer, "CL %d:%d", prev_x, prev_y);
+					n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 
