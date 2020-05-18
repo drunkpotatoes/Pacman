@@ -1,8 +1,8 @@
 # Pacman
 
-## PROTOCOL
+## CLIENT-SERVER PROTOCOLS
 
-### Client-Server SETUP:
+### SETUP:
 
 Client Request a Connection.
 
@@ -34,9 +34,9 @@ Client: OK
 Client: DC 
 
 
-### Client-Server LOOP:
+### GAME LOOP:
 
-The game loop consists of the server telling the clients eitheir to clear or to put pieces. And for the client to ask the server to move pieces. If the client move was valid the server will send a confirmation.
+The game loop consists of the server telling the clients eitheir to clear or to put pieces. And for the client to ask the server to move pieces.
 
 Server: PT PIECE @ Y:X [R,G,B] # USER_ID
 
@@ -50,3 +50,24 @@ At any time the server or the client can disconnet sending the respective messag
 Server: DC
 
 Client: DC
+
+
+## THREAD COMUNICATION
+
+### FIFOS
+
+
+All client threads will comunicate with the main thread through a FIFO in order to report plays. The message sent to the main thread is the message it will be sent to the client. The main thread doesn't check anything about the message, it just fowards it to all clients.
+
+Client Thread: PT PIECE @ Y:X [R,G,B] # USER_ID
+
+All clients  threads will also comunicate with the fruit thread in order to ask for a fruit spawn. They will send a message in the format bellow containing the time when the message was sent.
+
+Client Thread: TM SECONDS USECONDS
+
+The fruit thread will read this message and compute the diference between the time when reading to the time in the message (lets call the result: delta). After that it will check if delta is equal or greater than the spawning time. If it is it will print the fruit right away. Otherwise it will sleep for the remaning time and print the fruit after it wakes up. This method was used to make the fruit thread as light on the processor as possible.
+
+## GLOBAL VARIABLES
+
+
+
