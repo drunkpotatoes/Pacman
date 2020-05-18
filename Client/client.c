@@ -29,7 +29,7 @@ int monster_xy[2];
 
 
 unsigned long my_id;
-
+volatile int debug;
 
 Uint32 Event_ShowSomething;
 
@@ -67,7 +67,7 @@ void* server_listen_thread(void * arg)
 
 		if (n == 0) 	continue;
 
-		printf("Received : %s\n",buffer);
+		debug_print("LISTEN", buffer, pthread_self(),0,debug);
 
 		if(strstr(buffer, "PT"))
 		{
@@ -136,7 +136,6 @@ void* server_listen_thread(void * arg)
 		}
 		else if(strstr(buffer, "DC"))
 		{
-			fprintf(stdout , "Server SHUTDOWN\n");
 
 			/* clears event data */
 			SDL_memset(&event, 0, sizeof(event)); /* or SDL_zero(event) */
@@ -171,6 +170,8 @@ int main(int argc, char** argv)
 	RGB_MON[1] = 0;
 	RGB_MON[2] = 255;
 
+
+	debug = 1;
 	
 
 	/* sets up server connetion)*/
@@ -234,10 +235,12 @@ int game_loop(int fd)
 
 				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);
 
-				else if(piece == BRICK)					paint_brick(x,y);
+				else if(piece == LEMON)					paint_lemon(x,y);
+
+				else if(piece == CHERRY)				paint_cherry(x,y);
 		
 
-				else /* not expected piece */ 			{fprintf(stderr,"\nInvalid Piece Received...\n"); return -1;}
+				else /* not expected piece */ 			{inv_piece(piece); continue;}
 			}
 
 			/* pacman movement */
@@ -248,7 +251,7 @@ int game_loop(int fd)
 				window_y = event.motion.y;
 				get_board_place(window_x, window_y, & board_x, &board_y);
 
-				n = sprintf(buffer, "MV %d @ %d:%d => %d:%d", PACMAN, pacman_xy[1], pacman_xy[0], board_y, board_x);
+				n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", PACMAN, pacman_xy[1], pacman_xy[0], board_y, board_x);
 				buffer[n] = '\0';
 				printf("Sent: %s\n", buffer);
 
@@ -261,7 +264,7 @@ int game_loop(int fd)
 			{
 				if (event.key.keysym.sym == SDLK_w )
 				{
-					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1]-1, monster_xy[0]);
+					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1]-1, monster_xy[0]);
 					
 					buffer[n] = '\0';
 					printf("Sent: %s\n", buffer);
@@ -270,7 +273,7 @@ int game_loop(int fd)
 				}
 				else if (event.key.keysym.sym == SDLK_s)
 				{
-					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1]+1, monster_xy[0]);
+					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1]+1, monster_xy[0]);
 
 					buffer[n] = '\0';
 					printf("Sent: %s\n", buffer);
@@ -279,7 +282,7 @@ int game_loop(int fd)
 				}
 				else if(event.key.keysym.sym == SDLK_a)
 				{
-					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1], monster_xy[0]-1);
+					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1], monster_xy[0]-1);
 					buffer[n] = '\0';
 					printf("Sent: %s\n", buffer);
 
@@ -287,7 +290,7 @@ int game_loop(int fd)
 				}
 				else if(event.key.keysym.sym  == SDLK_d)
 				{
-					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d",MONSTER, monster_xy[1], monster_xy[0], monster_xy[1], monster_xy[0]+1);
+					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n",MONSTER, monster_xy[1], monster_xy[0], monster_xy[1], monster_xy[0]+1);
 					buffer[n] = '\0';
 					printf("Sent: %s\n", buffer);
 
@@ -319,32 +322,34 @@ int server_setup(int * rfd)
 
 	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 	mem_err("Addrinfo Information");
 
-	while (1)
+
+	while(1)
 	{
 		
+		debug_print("MAIN", "Connecting to Server...", pthread_self(),2,debug);
+
 		/* connects to server */
-		if ( (fd = client_connect(res, SERVER_IP, SERVER_PORT)) == -1) 		{fprintf(stderr, "It was not possible to establish a connection with the server\n"); exit(1);}
+		if ( (fd = client_connect(res, SERVER_IP, SERVER_PORT)) == -1) 		{fprintf(stderr, "It was not possible to establishe a connection with the server\n"); exit(1);}
 
 		*rfd = fd; 
 
 		n = sprintf(buffer, "RQ\n");
-
 		buffer[n] = '\0';
 
-		
-
 		/* sends a connection request to server */
-		if (send(fd, buffer,BUFF_SIZE,0) == -1) 				{func_err("send"); return -1;}
+		if (send(fd, buffer,BUFF_SIZE,0) == -1) 							{func_err("send"); return -1;}
 
-		printf("Sent: %s\n", buffer);
+		debug_print("MAIN", buffer, pthread_self(),1,debug);
+
 		/* sets a timeout of 1 second*/
 		setsockopt(fd,SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
-		if ( (n = recv(fd,buffer,BUFF_SIZE,0) )== -1) 			{func_err("recv"); return -1;};
+		
+		if ( (n = recv(fd,buffer,BUFF_SIZE,0) )== -1) 						{fprintf(stderr,"Connectiong Timedout...\n"); return -1;};
 
 		buffer[n] = '\0';
-		printf("Received: %s\n", buffer);
 
+		debug_print("MAIN", buffer, pthread_self(),0,debug);
 		nr_pieces = 0;
 
 		/* server welcome */
@@ -352,124 +357,121 @@ int server_setup(int * rfd)
 		{	
 
 
-			if(sscanf(buffer, "%*s # %lx\n", &my_id) != 1) 		{inv_format(buffer); return -1;}
+				if(sscanf(buffer, "%*s # %lx\n", &my_id) != 1) 				{inv_format(buffer); return -1;}
 
-			n = sprintf(buffer, "CC [%d,%d,%d] [%d,%d,%d]\n", RGB_PAC[0], RGB_PAC[1], RGB_PAC[2], RGB_MON[0], RGB_MON[1], RGB_MON[2]);
+				n = sprintf(buffer, "CC [%d,%d,%d] [%d,%d,%d]\n", RGB_PAC[0], RGB_PAC[1], RGB_PAC[2], RGB_MON[0], RGB_MON[1], RGB_MON[2]);
 
-			buffer[n] = '\0';
-
-			/* sends colour selection to server */
-			if (send(fd, buffer,BUFF_SIZE,0) == -1) 			{func_err("send"); return -1;}
-
-			printf("Sent: %s\n", buffer);
-
-			/* waits for map layout */
-			if (( n = recv(fd, buffer, BUFF_SIZE, 0) ) == -1) 	{func_err("recv"); return -1;}
-
-
-			buffer[n] = '\0';
-			
-
-			printf("Received: %s\n", buffer);
-
-
-			if(strstr(buffer,"MP") == NULL)  					{inv_msg(buffer); return -1;}
- 		
-			if(sscanf(buffer, "%*s %d:%d\n", &row, &col) != 2) 	{inv_format(buffer); return -1;}
-
-			/* print board of size row x col */
-			create_board_window(col, row);
-
-			while(1)
-			{
-				if ((n = recv(fd, buffer, BUFF_SIZE, 0) )==-1) 	{func_err("recv"); return -1;}
-				
 				buffer[n] = '\0';
-				printf("Received %s\n", buffer);
 
+				/* sends colour selection to server */
+				if (send(fd, buffer,BUFF_SIZE,0) == -1) 					{func_err("send"); return -1;}
 
-				/* if receives summary message terminates */
-				if (strstr(buffer, "SS") != NULL ) 		break;
+				debug_print("MAIN", buffer, pthread_self(),1,debug);
 
+				/* waits for map layout */
+				if (( n = recv(fd, buffer, BUFF_SIZE, 0) ) == -1) 			{fprintf(stderr,"Connectiong Timedout...\n"); return -1;};
 
-				/* not expected message, disconnects*/
-				if ( (strstr(buffer, "PT") == NULL)  ) 			{inv_msg(buffer); return -1;}
+				buffer[n] = '\0';
+				
+				debug_print("MAIN", buffer, pthread_self(),0,debug);
 
+				if(strstr(buffer,"MP") == NULL)  							{inv_msg(buffer); return -1;}
+	 		
+				if(sscanf(buffer, "%*s %d:%d\n", &row, &col) != 2) 			{inv_format(buffer); return -1;}
 
-				nr_pieces++;
+				/* print board of size row x col */
+				create_board_window(col, row);
 
-				if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] # %lx\n", &piece,&y,&x,&r,&g,&b, &id) != 7) 	{inv_format(buffer); return -1;}
-
-
-				if     (piece == BRICK)					paint_brick(x,y);
-
-				else if(piece == PACMAN)				paint_pacman(x,y,r,g,b);
-			
-				else if(piece == MONSTER)				paint_monster(x,y,r,g,b);	
-
-				else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);
-		
-
-				else /* not expected piece */ 			{fprintf(stderr,"\nInvalid Piece Received...\n"); return -1;}
-
-
-				if(id == my_id)
+				while(1)
 				{
-					if (piece == PACMAN)
+					if ((n = recv(fd, buffer, BUFF_SIZE, 0) )==-1) 			{fprintf(stderr,"Connectiong Timedout...\n"); return -1;};
+					
+					buffer[n] = '\0';
+					debug_print("MAIN", buffer, pthread_self(),0,debug);
+
+
+					/* if receives summary message terminates */
+					if (strstr(buffer, "SS") != NULL ) 		break;
+
+
+					/* not expected message, disconnects*/
+					if ( (strstr(buffer, "PT") == NULL)  ) 					{inv_msg(buffer); return -1;}
+
+
+					nr_pieces++;
+
+					if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] # %lx\n", &piece,&y,&x,&r,&g,&b, &id) != 7) 	{inv_format(buffer); return -1;}
+
+
+					if     (piece == BRICK)					paint_brick(x,y);
+
+					else if(piece == PACMAN)				paint_pacman(x,y,r,g,b);
+				
+					else if(piece == MONSTER)				paint_monster(x,y,r,g,b);	
+
+					else if(piece == POWER_PACMAN) 			paint_powerpacman(x,y,r,g,b);
+
+					else if(piece == LEMON)					paint_lemon(x,y);
+
+					else if(piece == CHERRY)				paint_cherry(x,y);
+			
+
+					else /* not expected piece */ 			{inv_piece(piece); return -1;}
+
+
+					if(id == my_id)
 					{
-						pacman_xy[0] = x;
-						pacman_xy[1] = y;
+						if (piece == PACMAN)
+						{
+							pacman_xy[0] = x;
+							pacman_xy[1] = y;
+						}
+
+						if (piece == MONSTER)
+						{
+							monster_xy[0] = x;
+							monster_xy[1] = y;
+						}
 					}
 
-					if (piece == MONSTER)
-					{
-						monster_xy[0] = x;
-						monster_xy[1] = y;
-					}
 				}
 
-			}
 
+				/* gets number of messages sent */
+				if (sscanf(buffer, "%*s %d",&nr) != 1) 						{inv_format(buffer); return -1;}
 
-			/* gets number of messages sent */
-			if (sscanf(buffer, "%*s %d",&nr) != 1) 		{inv_format(buffer); return -1;}
+				debug_print("MAIN", buffer, pthread_self(),0,debug);
 
-			printf("Received: %s\n", buffer);
+				if(nr_pieces >= nr)
+				{
+					/* all good*/
+					n = sprintf(buffer, "OK\n");
+					buffer[n] = '\0';
 
-			if(nr_pieces >= nr)
-			{
-				/* all good*/
-				n = sprintf(buffer, "OK");
-				buffer[n] = '\0';
+					if (send(fd,buffer,BUFF_SIZE,0) == -1) 					{func_err("send"); return -1;}
 
-				if (send(fd,buffer,BUFF_SIZE,0) == -1) 	{func_err("send"); return -1;}
+					debug_print("MAIN", buffer, pthread_self(),1,debug);
 
-				printf("Sent: %s\n", buffer);
+				}
 
-			}
+				debug_print("MAIN", "Server Setup Completed...", pthread_self(),2,debug);
 
-			return fd;
-
-
+				return fd;
 		}
 
 		/*server wait */
 		else if (strstr(buffer,"W8") != NULL)
 		{
-			printf("%s\n", buffer);
+				debug_print("MAIN", "Server is FULL. Waiting 10 and retrying...", pthread_self(),2,debug);
 
-			/* closes connection */
-			close(fd);
+				/* closes connection */
+				close(fd);
 
-			/* sleeps and retries */
-			sleep(10);
+				/* sleeps and retries */
+				sleep(10);
 		}
-		
-
-		/* timeout  - waits 1s*/
-		sleep(1);
-
 	}
+
 }
 
 
@@ -478,12 +480,14 @@ void server_disconnect(int fd)
 
 	char buffer[BUFF_SIZE];
 	int  n;
-	n = sprintf(buffer, "DC");
-	buffer[n] = '\0';
 
+	debug_print("MAIN", "Disconnecting...", pthread_self(),2,debug);
+
+	n = sprintf(buffer, "DC\n");
+	buffer[n] = '\0';
 	send(fd,buffer,BUFF_SIZE,0);
 				
-	printf("Sent: %s\n", buffer);
+	debug_print("MAIN", buffer, pthread_self(),1,debug);
 
 	close(fd);
 
