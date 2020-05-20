@@ -69,6 +69,7 @@ The fruit thread will read this message and compute the diference between the ti
 
 ## GLOBAL VARIABLES
 
+### Structs
 typedef struct board_infos{
 
     board_piece** board;
@@ -100,3 +101,18 @@ typedef struct _client{
 
 }client;
 
+### Locks and Conditional Variables
+
+    pthread_mutex_t * lock_col;             /*locks board*/
+
+    pthread_mutex_t   lock_empty;           /*locks empty*/
+
+    pthread_mutex_t   lock_fruits;          /*locks max fruits*/
+
+    pthread_mutex_t   lock_cur;             /*locks curr fruits*/
+
+    pthread_mutex_t   lock_success;         /*locks cond variable shut_down success*/
+
+    pthread_rwlock_t  lock_clients;         /* locks client list*/
+
+    pthread_cond_t    shut_down_success;    /*conditional variable to wait for thread on shutdown*/
