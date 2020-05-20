@@ -131,5 +131,5 @@ typedef struct _client{
     
     ### Client
     
-    Main thread     - Handles user input and sends it to the server. Plots information received from server listen thread.
+    Main thread     - Handles user input and sends it to the server. Plots information received from listen thread.
     Listen thread   - Listens to server messages and sends the plays to the main thread via SQL queue.
