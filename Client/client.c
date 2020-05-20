@@ -183,26 +183,70 @@ void* server_listen_thread(void * arg)
 int main(int argc, char** argv)
 {
 
-	int fd;
-	
-	pthread_t 	thread_id;
+	int 					fd;
+	pthread_t 				thread_id;
 
-	RGB_PAC[0] = 255;
-	RGB_PAC[1] = 0;
-	RGB_PAC[2] = 0;
+	char					ip[16];
+	char 					port[6];
 
-	RGB_MON[0] = 0;
-	RGB_MON[1] = 0;
-	RGB_MON[2] = 255;
+	struct 	sigaction 		action_sig_pipe;
+
+	if(argc!=9)
+	{
+		fprintf(stderr, "Usage: pacman <server ip address> <port number> <pacman r> <pacman g> <pacman b> <monster r> <monster g> <monster b>\n");
+		exit(0);
+	}
+
+
+	if(ip_verf(argv[1]) == 0)
+	{
+		strcpy(ip, argv[1]);
+	}
+	else 			exit(0);
+
+
+	if(port_verf(argv[2]) == 0)
+	{
+		strcpy(port, argv[2]);
+	}
+	else 			exit(0);
+
+	if(rgb_verf(argv[3], argv[4], argv[5]) == 0)
+	{
+		RGB_PAC[0] = atoi(argv[3]);
+		RGB_PAC[1] = atoi(argv[4]);
+		RGB_PAC[2] = atoi(argv[5]);
+	}
+
+	else 			exit(0);
+
+	if(rgb_verf(argv[6], argv[7], argv[8]) == 0)
+	{
+		RGB_MON[0] = atoi(argv[6]);
+		RGB_MON[1] = atoi(argv[7]);
+		RGB_MON[2] = atoi(argv[8]);
+	}
+
+	else 			exit(0);
+
 
 	pac_format = PACMAN;
 
 
-	debug = 1;
+
+   	/* sets ignore to sig pipe signal*/
+   	memset(&action_sig_pipe, 0 , sizeof(struct sigaction));
+	action_sig_pipe.sa_handler = SIG_IGN;
+	sigemptyset(&action_sig_pipe.sa_mask);
+	sigaction(SIGPIPE, &action_sig_pipe, NULL);
+
+
+	debug = 0;
+	
 	
 
 	/* sets up server connetion)*/
-	if ( (server_setup(&fd) ) == -1) 			server_disconnect(fd);
+	if ( (server_setup(&fd, ip, port) ) == -1) 			server_disconnect(fd);
 	
 	/* creates thread to listem to server*/
 	/* this thread will update the SDL event*/
@@ -213,6 +257,9 @@ int main(int argc, char** argv)
 	/* game loop will send the moves to the server*/
 	/* it will also print what it receives from the listen server thread*/
 	if (game_loop(fd) == -1) 					server_disconnect(fd);
+
+
+	close(fd);
 
 
 	getchar();
@@ -332,7 +379,7 @@ int game_loop(int fd)
 }
 
 
-int server_setup(int * rfd)
+int server_setup(int * rfd, char* server_ip, char* server_port)
 {
 
 	int fd,n,row,col,nr_pieces,x,y,r,g,b,piece,nr;
@@ -350,7 +397,7 @@ int server_setup(int * rfd)
     tv.tv_sec = SECONDS_TIMEOUT;
     tv.tv_usec = USECONDS_TIMEOUT;
 
-	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 	mem_err("Addrinfo Information");
+	if ( (res = malloc(sizeof(struct addrinfo*)) ) == NULL) 				mem_err("Addrinfo Information");
 
 
 	while(1)
@@ -359,7 +406,7 @@ int server_setup(int * rfd)
 		debug_print("MAIN", "Connecting to Server...", pthread_self(),2,debug);
 
 		/* connects to server */
-		if ( (fd = client_connect(res, SERVER_IP, SERVER_PORT)) == -1) 		{fprintf(stderr, "It was not possible to establishe a connection with the server\n"); exit(1);}
+		if ( (fd = client_connect(res, server_ip, server_port)) == -1) 		{fprintf(stderr, "It was not possible to establishe a connection with the server\n"); exit(1);}
 
 		*rfd = fd; 
 

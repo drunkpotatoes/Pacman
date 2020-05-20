@@ -13,6 +13,6 @@ typedef struct Event_ShowSomething_Data{
 } Event_ShowSomething_Data;
 
 void * server_listen_thread(void*);
-int server_setup(int*);
+int server_setup(int*, char*,char*);
 void server_disconnect(int);
 int game_loop(int fd);
