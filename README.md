@@ -116,3 +116,20 @@ typedef struct _client{
     pthread_rwlock_t  lock_clients;         /* locks client list*/
 
     pthread_cond_t    shut_down_success;    /*conditional variable to wait for thread on shutdown*/
+    
+    ## Architecture
+    
+    ### Server
+    
+    The server is divided in:
+    
+    Main thread     - Sends all clients the plays and plots them on the SDL.
+    Fruit thread    - Handles fruit respawn.
+    Score thread    - Handles score plot.
+    Accept thread   - Accepts incoming connections and creates a dedicated client thread for each client.
+    Client thread   - Handles client comunication
+    
+    ### Client
+    
+    Main thread     - Handles user input and sends it to the server. Plots information received from server listen thread.
+    Listen thread   - Listens to server messages and sends the plays to the main thread via SQL queue.
