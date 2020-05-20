@@ -98,5 +98,5 @@ typedef struct client{
    
    struct client *next;
 
-}client;
+}client
 
