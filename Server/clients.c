@@ -39,6 +39,9 @@ void add_client(client** client_list, unsigned long id, int fd, int* pac, int *m
 		new_cli->m_g = mon[1];
 		new_cli->m_b = mon[2];
 
+		new_cli->fruit_score = 0;
+		new_cli->player_score = 0;
+
 		new_cli->next = NULL;
 
 		*client_list = new_cli;
@@ -297,3 +300,79 @@ int number_of_clients(client* head)
 
     return i;
 }
+
+
+void inc_fruit_score(client* head, unsigned long id)
+{
+	client* aux;
+
+	if(head == NULL)
+	{
+		return;
+	}
+
+	while(aux != NULL)
+	{
+		if (aux->user_id == id)
+		{
+			aux->fruit_score++;
+			return;
+		}
+
+		aux = aux->next;
+	}
+
+	return;
+}
+
+void inc_player_score(client* head, unsigned long id)
+{
+	client* aux;
+
+	if(head == NULL)
+	{
+		return;
+	}
+
+	while(aux != NULL)
+	{
+		if (aux->user_id == id)
+		{
+			aux->player_score++;
+			return;
+		}
+
+		aux = aux->next;
+	}
+
+	return;
+}
+
+
+int print_score_buffer(client* head, char** buffer)
+{
+	int i,n;
+	client* aux;
+
+	if(head == NULL)
+	{
+		return 0;
+	}
+	
+	aux = head;
+	i = 0;
+
+	/* creates buffer with all scores*/
+    while (aux != NULL) 
+    {
+  	
+    	n = sprintf(buffer[i],"SC PLAYER[%lx]\tFruits: %d\tPlayers: %d\n", aux->user_id, aux->fruit_score, aux->player_score);
+    	buffer[i][n] = '\0';
+    	i++;
+		aux = aux->next;
+    }
+
+    aux = head;
+
+    return i;
+}	

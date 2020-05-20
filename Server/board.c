@@ -71,6 +71,7 @@ board_info init_board()
 			board[i][j].r = 0;
 			board[i][j].g = 0;
 			board[i][j].b = 0;
+			board[i][j].counter = 0;
 
 		}
 	}
@@ -208,6 +209,14 @@ int is_pacman(int row, int col, board_piece** board)
 		return 0;
 }
 
+int is_power_pacman(int row, int col, board_piece** board)
+{
+	if(board[row][col].piece == POWER_PACMAN)
+		return 1;
+	else
+		return 0;
+}
+
 int is_monster(int row, int col, board_piece** board)
 {
 	if(board[row][col].piece == MONSTER)
@@ -270,4 +279,50 @@ void move (board_piece** board, int row, int col, int to_row, int to_col)
 
 	return;
 }
+
+
+void transform_pacman(board_piece** board, int row, int col, int counter)
+{
+	/* safety check */
+	if (is_pacman(row,col,board))
+	{
+		board[row][col].piece = POWER_PACMAN;
+		board[row][col].counter = counter;
+	}
+}
+
+void reverse_pacman(board_piece** board, int row, int col)
+{
+	/* safety check */
+	if(is_power_pacman(row,col,board))
+	{
+		board[row][col].piece = PACMAN;
+		return;
+	}
+}
+
+
+int decrement_counter(board_piece** board, int row, int col)
+{
+	/* safety check */
+	if(is_power_pacman(row,col,board))
+	{
+		
+		return --board[row][col].counter;
+	}
+
+	return -1;
+}
+
+int increment_counter(board_piece** board, int row, int col)
+{
+	/* safety check */
+	if(is_power_pacman(row,col,board))
+	{
+		return ++board[row][col].counter;
+	}
+
+	return -1;
+}
+
 

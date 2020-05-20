@@ -8,6 +8,7 @@
 void *	client_thread		(void*);
 void *	accept_thread 		(void*);
 void * 	fruity_thread 		(void*);
+void * 	score_thread 		(void*);
 
 int	client_setup		(int, int*,int*);
 int	client_loop		(int, int ,int);
@@ -20,6 +21,9 @@ int 	write_play_to_main	(char*, int);
 int 	write_fruit 		(int,int,int);
 
 int 	pacman_movement		(board_piece**, int, int, int, int, int, int, 					int, int, int*);
+
+int 	power_pacman_movement	(board_piece**, int, int, int, int, int, int, 					int, int, int*);
+
 int 	monster_movement	(board_piece**, int, int, int, int, int, int, 					int, int, int*);
 
 int 	bounce			(board_piece**,int,int,int,int,int,int,
