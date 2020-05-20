@@ -27,6 +27,8 @@ int RGB_MON[3];
 int pacman_xy[2];
 int monster_xy[2];
 
+int pac_format;
+
 
 unsigned long my_id;
 volatile int debug;
@@ -39,13 +41,19 @@ void* server_listen_thread(void * arg)
 	int fd,n,x,y,r,g,b,piece;
 
 	char buffer[BUFF_SIZE];
+	char buffer_aux[BUFF_SIZE];
+
 
 	unsigned long id;
 
 	struct timeval tv;
 
+
 	SDL_Event event;
 	Event_ShowSomething_Data * event_data;
+
+	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
+	memset(buffer_aux, ' ', BUFF_SIZE*sizeof(char));
 
 	fd = *((int*) arg);
 
@@ -100,9 +108,19 @@ void* server_listen_thread(void * arg)
 				{
 					pacman_xy[0] = x;
 					pacman_xy[1] = y;
+
+					pac_format = PACMAN;
 				}
 
-				if (piece == MONSTER)
+				else if(piece == POWER_PACMAN)
+				{
+					pacman_xy[0] = x;
+					pacman_xy[1] = y;
+
+					pac_format = POWER_PACMAN;
+				}
+
+				else if (piece == MONSTER)
 				{
 					monster_xy[0] = x;
 					monster_xy[1] = y;
@@ -132,6 +150,13 @@ void* server_listen_thread(void * arg)
 
 			/* sends the event */
 			SDL_PushEvent(&event);
+
+		}
+
+		else if(strstr(buffer, "SC"))
+		{
+			sscanf(buffer,"%*s %[^\n]", buffer_aux);
+			printf("%s\n", buffer_aux);
 
 		}
 		else if(strstr(buffer, "DC"))
@@ -170,6 +195,8 @@ int main(int argc, char** argv)
 	RGB_MON[1] = 0;
 	RGB_MON[2] = 255;
 
+	pac_format = PACMAN;
+
 
 	debug = 1;
 	
@@ -199,11 +226,11 @@ int game_loop(int fd)
 	int 		n,prev_x, prev_y, board_x, board_y, window_x, window_y, piece,r,g,b;
 	char 		buffer[BUFF_SIZE];
 
-
-
 	/*monster and packman position*/
 	int x = 0;
 	int y = 0;
+
+	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
 
 	Event_ShowSomething =  SDL_RegisterEvents(1);
 
@@ -226,6 +253,7 @@ int game_loop(int fd)
 				/* retrieve data */
 				x = data->x; y = data->y; r = data->r; g = data->g; b = data->b; piece = data->piece;
 
+				free(data);
 
 				if 	  (piece == EMPTY)					clear_place(x,y);		
 				
@@ -251,9 +279,9 @@ int game_loop(int fd)
 				window_y = event.motion.y;
 				get_board_place(window_x, window_y, & board_x, &board_y);
 
-				n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", PACMAN, pacman_xy[1], pacman_xy[0], board_y, board_x);
+				n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", pac_format, pacman_xy[1], pacman_xy[0], board_y, board_x);
 				buffer[n] = '\0';
-				printf("Sent: %s\n", buffer);
+				debug_print("MAIN", buffer, pthread_self(), 1, debug);
 
 				if (send(fd,buffer, BUFF_SIZE,0) == -1)		return -1;
 				
@@ -267,7 +295,7 @@ int game_loop(int fd)
 					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1]-1, monster_xy[0]);
 					
 					buffer[n] = '\0';
-					printf("Sent: %s\n", buffer);
+					debug_print("MAIN", buffer, pthread_self(), 1, debug);
 
 					if (send(fd,buffer, BUFF_SIZE,0) == -1)		return -1;
 				}
@@ -276,7 +304,7 @@ int game_loop(int fd)
 					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1]+1, monster_xy[0]);
 
 					buffer[n] = '\0';
-					printf("Sent: %s\n", buffer);
+					debug_print("MAIN", buffer, pthread_self(), 1, debug);
 
 					if (send(fd,buffer, BUFF_SIZE,0) == -1)		return -1;
 				}
@@ -284,7 +312,7 @@ int game_loop(int fd)
 				{
 					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n", MONSTER, monster_xy[1], monster_xy[0], monster_xy[1], monster_xy[0]-1);
 					buffer[n] = '\0';
-					printf("Sent: %s\n", buffer);
+					debug_print("MAIN", buffer, pthread_self(), 1, debug);
 
 					if (send(fd,buffer, BUFF_SIZE,0) == -1)		return -1;
 				}
@@ -292,7 +320,7 @@ int game_loop(int fd)
 				{
 					n = sprintf(buffer, "MV %d @ %d:%d => %d:%d\n",MONSTER, monster_xy[1], monster_xy[0], monster_xy[1], monster_xy[0]+1);
 					buffer[n] = '\0';
-					printf("Sent: %s\n", buffer);
+					debug_print("MAIN", buffer, pthread_self(), 1, debug);
 
 					if (send(fd,buffer, BUFF_SIZE,0) == -1)		return -1;
 				}
@@ -314,6 +342,8 @@ int server_setup(int * rfd)
 	char buffer[BUFF_SIZE];
 
     struct timeval tv;
+
+    memset(buffer, ' ', BUFF_SIZE*sizeof(char));
 
 
      /* sets time struct to 1 second */
@@ -480,6 +510,8 @@ void server_disconnect(int fd)
 
 	char buffer[BUFF_SIZE];
 	int  n;
+
+	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
 
 	debug_print("MAIN", "Disconnecting...", pthread_self(),2,debug);
 
