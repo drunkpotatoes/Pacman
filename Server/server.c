@@ -69,10 +69,10 @@ void handler (int sigtype)
 int main(int argc, char** argv)
 {
 
-	int 		i,x,y;
-    pthread_t 	accept_thread_id, fruits_thread_id, score_thread_id;
-   	struct 		sigaction action_sig_pipe;
-   	struct 		sigaction action_int;
+	int 						i,x,y,fid;
+    pthread_t 					accept_thread_id, fruits_thread_id, score_thread_id;
+   	struct 		sigaction 		action_sig_pipe;
+   	struct 		sigaction 		action_int;
 
 
    	/* sets ignore to sig pipe signal*/
@@ -88,7 +88,7 @@ int main(int argc, char** argv)
 	sigaction(SIGINT, &action_int, NULL);
 
 	shut_down = 0;
-	debug = 1;
+	debug = 0;
 	clients_head = NULL;
 	status = init_board();
 
@@ -127,19 +127,26 @@ int main(int argc, char** argv)
 
 	/* initializes shutdown_sucess */
 	if(pthread_cond_init(&shut_down_success,NULL) !=0)								{func_err("pthread_cond_init"); exit(1);}
+	
 	/* creates thread to accept clients*/
-	if (pthread_create(&accept_thread_id , NULL, accept_thread, NULL)) 				{func_err("pthread_create"); exit(1);}
+	if (pthread_create(&accept_thread_id , NULL, accept_thread, (void*) &fid)) 		{func_err("pthread_create"); exit(1);}
+	if (pthread_detach(accept_thread_id))											{func_err("pthread_detach"); exit(1);}
 
 	/* creates thread to handle fruits*/
 	if (pthread_create(&fruits_thread_id , NULL, fruity_thread, NULL)) 				{func_err("pthread_create"); exit(1);}
+	if (pthread_detach(fruits_thread_id))											{func_err("pthread_detach"); exit(1);}
 
 	/* creates thread to handle score*/
 	if (pthread_create(&score_thread_id , NULL, score_thread, NULL)) 				{func_err("pthread_create"); exit(1);}
+	if (pthread_detach(score_thread_id))											{func_err("pthread_detach"); exit(1);}
 
 	/* thread to send information to all clients*/
 	main_thread();
 
-	/* waits for all threads to clean up*/
+	/* closes accept thread socket*/
+	close(fid);
+
+	/*cleans up*/
 	server_disconnect();
 
 	exit(0);
@@ -152,9 +159,6 @@ int main_thread()
 
 	int 	n, fd, x, y, r, g, b, piece;
 	char 	buffer[BUFF_SIZE];
-
-	SDL_Event event;
-
 
 	/* tries to open the fifo */
 	if ( (fd = open(FIFO_FILE, O_RDONLY) ) == -1)
@@ -172,11 +176,6 @@ int main_thread()
 	/* main cycle */
 	while(!shut_down)
 	{
-
-		/* checks for window close*/
-		while(SDL_PollEvent(&event))
-			if(event.type == SDL_QUIT)
-				shut_down = 1;
 
 		if (  (n = read(fd, buffer, BUFF_SIZE) ) == -1 ) 				continue; 
 
@@ -237,17 +236,6 @@ void * fruity_thread (void* arg)
 	memset(buffer,' ', BUFF_SIZE*sizeof(char));
 	memset(rgb,0,3*sizeof(int));
 
-	/* tries to open the fifo */
-	if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)
-	{
-		/* if it fails to open, tries to create */
-		if (mkfifo(FRUIT_FIFO_FILE, 0666)!=0)					{func_err("mkfifo"); return NULL; }
-
-		/* tries to open again */
-		if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)		{func_err("open");   return NULL; }
-	}
-
-	debug_print("FRUIT" ,"Opened Fruits FIFO for Read", pthread_self(),2,debug);
 
 	/* tries to opens fifo */
 	if ((ff_fd = open(FIFO_FILE, O_WRONLY))== -1) 		
@@ -260,6 +248,18 @@ void * fruity_thread (void* arg)
 	}
 
 	debug_print("FRUIT" ,"Opened Plays FIFO for Write", pthread_self(),2,debug);
+
+	/* tries to open the fifo */
+	if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)
+	{
+		/* if it fails to open, tries to create */
+		if (mkfifo(FRUIT_FIFO_FILE, 0666)!=0)					{func_err("mkfifo"); return NULL; }
+
+		/* tries to open again */
+		if ( (fd = open(FRUIT_FIFO_FILE, O_RDONLY) ) == -1)		{func_err("open");   return NULL; }
+	}
+
+	debug_print("FRUIT" ,"Opened Fruits FIFO for Read", pthread_self(),2,debug);
 
 
 	while(!shut_down)
@@ -298,8 +298,9 @@ void * fruity_thread (void* arg)
 			/* receveid before spawn time - should be the usual case*/
 			if (dif < FRUIT_ST_USECONDS)
 			{
-				dif_tv.tv_nsec = (now.tv_usec - start.tv_usec)*1000;
-				dif_tv.tv_sec = (now.tv_sec - start.tv_sec);
+				dif_tv.tv_sec = floor((FRUIT_ST_USECONDS - dif)/1000000);
+				dif_tv.tv_nsec = (FRUIT_ST_USECONDS - dif)%1000000;
+				
 				/* sleeps through the remaining time to spawn the fruit and relases the processor*/
 				nanosleep(&dif_tv,NULL);
 			}
@@ -326,6 +327,9 @@ void * fruity_thread (void* arg)
 		else 													{inv_msg(buffer); continue;}
 	}
 
+	close(fd);
+	close(ff_fd);
+
 	return NULL;
 }
 
@@ -334,71 +338,68 @@ void * score_thread (void* arg)
 {
 	
 
-	int counter, score_size, nr_clients,i,n;
-	char ** buffer;
-	struct timespec time;
+	int  				max_number_clients,i,n;
+	char ** 			buffer;
+	char				buffer_aux[BUFF_SIZE];
+	struct timespec 	time;
+
+	memset(buffer_aux, ' ', sizeof(char)*BUFF_SIZE);
 
 	time.tv_sec = SCORE_TIME_SECONDS;
 	time.tv_nsec = 0;
 
-	counter = 1;
 	n = 0;
-	score_size = INIT_SCORE_SIZE;
+
+	/* calculates max number of clients */
+	pthread_mutex_lock(&lock_empty);
+	pthread_rwlock_rdlock(&lock_clients);
+
+	max_number_clients =  number_of_clients(clients_head) + status.empty/4;
+
+	pthread_rwlock_unlock(&lock_clients);
+	pthread_mutex_unlock(&lock_empty);
+	
+
 
 	/* inits buffer allocation*/
-	if ((buffer = (char**) malloc(sizeof(char*)*score_size)) == NULL) 			mem_err("score buffer");
+	if ((buffer = (char**) malloc(sizeof(char*)*max_number_clients)) == NULL) 			mem_err("score buffer");
 
-	for (i = 0; i < score_size ; i++)
+	for (i = 0; i < max_number_clients ; i++)
 	{
-		if ((buffer[i] = (char*) malloc(sizeof(char)*BUFF_SIZE) ) == NULL ) 	mem_err("score buffer");
+		if ((buffer[i] = (char*) malloc(sizeof(char)*BUFF_SIZE) ) == NULL ) 			mem_err("score buffer");
 		memset(buffer[i], ' ', sizeof(char)*BUFF_SIZE);
-		buffer[i][BUFF_SIZE] = '\0';
+		buffer[i][BUFF_SIZE-1] = '\0';
 	}
 
 	while(!shut_down)
 	{
 		nanosleep(&time,NULL);
 
-		nr_clients = number_of_clients(clients_head);
-
-		/* re-uses buffer if possible - if not realocates buffer to one more init chunk */
-		if (score_size < nr_clients)
-		{	
-
-			/* frees previous buffer */
-			for (i = 0; i < score_size ; i++)
-			{
-				free(buffer[i]);
-			}
-
-			free(buffer);
-
-			/* increments size*/
-			score_size = INIT_SCORE_SIZE*(++counter);
-
-			/* allocates memory for new buffer */
-			if ((buffer = (char**) malloc (sizeof(char*)*score_size)) == NULL) 				mem_err("score buffer");
-
-			for (i = 0; i<score_size; i++)
-			{
-				if ((buffer[i] = (char*)malloc(sizeof(char)*BUFF_SIZE) ) == NULL)			mem_err("score buffer");
-				memset(buffer[i], ' ', sizeof(char)*BUFF_SIZE);
-				buffer[i][BUFF_SIZE] = '\0';
-			}
-		}
-
+		pthread_rwlock_rdlock(&lock_clients);
 		n = print_score_buffer(clients_head, buffer);
+
+		i = sprintf(buffer_aux,"SC ===================SCORE BOARD======================\n");
+		buffer_aux[i] = '\0';
+		send_all_clients(clients_head, buffer_aux,BUFF_SIZE);
+		debug_print("SCORE", buffer_aux, pthread_self(), 1, debug);
 
 		for (i = 0; i < n; i++)
 		{
 			send_all_clients(clients_head, buffer[i],BUFF_SIZE);
 			debug_print("SCORE", buffer[i], pthread_self(), 1, debug);
 		}
+
+		i = sprintf(buffer_aux,"SC ====================================================\n");
+		buffer_aux[i] = '\0';
+		send_all_clients(clients_head, buffer_aux,BUFF_SIZE);
+		debug_print("SCORE", buffer_aux, pthread_self(), 1, debug);
+
+		pthread_rwlock_unlock(&lock_clients);
 	}
 
 
 	/* frees previous buffer */
-	for (i = 0; i < score_size ; i++)
+	for (i = 0; i < max_number_clients ; i++)
 	{
 		free(buffer[i]);
 	}
@@ -414,6 +415,8 @@ void * accept_thread (void* arg)
 	
 	int 					fd,newfd,n;
 
+	int 					*p_fd;
+
 	char 					buffer[BUFF_SIZE];
 
 	struct sockaddr_in 		addr;
@@ -424,7 +427,9 @@ void * accept_thread (void* arg)
     
     pthread_t 				thread_id;
 
+    p_fd = (int*) arg;
 
+    memset(buffer, ' ', sizeof(char)*BUFF_SIZE);
 
     addrlen = sizeof(struct sockaddr);
     /* sets time struct to 1 second */
@@ -440,6 +445,8 @@ void * accept_thread (void* arg)
 	{
 		exit(1);
 	}
+
+	*p_fd = fd;
 
 	
 	debug_print("ACCEPT", "Accepting Connections from Clients...", pthread_self(), 2, debug);
@@ -466,6 +473,7 @@ void * accept_thread (void* arg)
 		{
 			/* creates thread to handle client */
 			if (pthread_create(&thread_id , NULL, client_thread, (void*) &newfd)) 	func_err("pthread_create");
+			if (pthread_detach(thread_id)) 											func_err("pthread_detach");
 
 		}
 	}
@@ -551,10 +559,10 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 	if ((*pff_fd = open(FIFO_FILE, O_WRONLY))== -1) 		
 	{
 		/*if it fails to open, tries to create */
-		if (mkfifo(FIFO_FILE, 0666)!=0)						{func_err("mkfifo"); return -1; }
+		if (mkfifo(FIFO_FILE, 0666)!=0)								{func_err("mkfifo"); return -1; }
 
 		/* tries to open again */
-		if ((*pff_fd = open(FIFO_FILE, O_WRONLY))== -1)		{func_err("open");   return -1; }
+		if ((*pff_fd = open(FIFO_FILE, O_WRONLY))== -1)				{func_err("open");   return -1; }
 	}
 
 	debug_print("CLIENT" ,"Opened Plays FIFO for Write", pthread_self(),2,debug);
@@ -579,7 +587,7 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 
 		buffer[n] = '\0';
 
-		if (send(fd,buffer,BUFF_SIZE,0) == -1) 			{func_err("send"); pthread_mutex_unlock(&lock_empty); return -1;}
+		if (send(fd,buffer,BUFF_SIZE,0) == -1) 						{func_err("send"); pthread_mutex_unlock(&lock_empty); return -1;}
 
 		debug_print("CLIENT" ,buffer, pthread_self(),1,debug);
 
@@ -787,11 +795,11 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 			if (diff >= USER_TIMEOUT_USECONDS)
 			{
 
-				for (n = 0; n < status.col ; n++) 			pthread_mutex_lock(&lock_col[n]);
+				for (n = 0; n < status.col ; n++) 					pthread_mutex_lock(&lock_col[n]);
 				/* cleans pacman and monster from board */
 				clear_player(status.board, status.row, status.col, (unsigned long) pthread_self(), coord);
 
-				for (n = 0; n < status.col ; n++) 			pthread_mutex_unlock(&lock_col[n]);
+				for (n = 0; n < status.col ; n++) 					pthread_mutex_unlock(&lock_col[n]);
 
 				/* generates new positions and clears hold ones*/
 				if(coord[0] != -1 && coord[1] != -1 && coord[2] != -1 && coord[3] != -1)
@@ -849,7 +857,7 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 			/* pacman movement */
 			if (piece == PACMAN) 	
 			{
-				if (!pacman_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, pac_rgb))  	continue;
+				if (!pacman_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, pac_rgb))  continue;
 
 				/*updates clock*/
 				gettimeofday(&start,NULL);
@@ -860,7 +868,7 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 			else if ( piece == MONSTER)	
 			{
 
-				if (!monster_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, mon_rgb)) 	continue;
+				if (!monster_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, mon_rgb)) continue;
 
 				/*updates clock*/
 				gettimeofday(&start,NULL);
@@ -870,13 +878,13 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 			else if (piece == POWER_PACMAN)
 			{
 
-				if (!power_pacman_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, mon_rgb)) 	continue;
+				if (!power_pacman_movement(status.board, status.row, status.col,x,y,prev_x,prev_y,ff_fd,ft_fd, mon_rgb)) continue;
 
 				/*updates clock*/
 				gettimeofday(&start,NULL);
 			}
 
-			else 		 																							inv_piece(piece);
+			else 		 										inv_piece(piece);
 
 		}
 
@@ -970,13 +978,10 @@ int write_play_to_main(char* play, int fd)
 int write_fruit(int ft_fd, int fd, int now)
 {
 	
-	int i, n, lemon;
-
-	int 	rgb[3];
-
-	char buffer[BUFF_SIZE];
-
-	struct timeval tv;
+	int 				i, n, lemon;
+	int 				rgb[3];
+	char 				buffer[BUFF_SIZE];
+	struct timeval 		tv;
 
 	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
 	memset(rgb, 0, 3*sizeof(int));
@@ -1025,7 +1030,8 @@ int write_fruit(int ft_fd, int fd, int now)
 
 void server_disconnect()
 {
-	int i;
+	int 	i;
+
 
 	close_board_windows();
 
@@ -1073,17 +1079,18 @@ void server_disconnect()
 	if (pthread_mutex_destroy(&lock_fruits)) 				func_err("pthread_mutex_destroy");
 	if (pthread_mutex_destroy(&lock_cur)) 					func_err("pthread_mutex_destroy");
 	if (pthread_mutex_destroy(&lock_success))				func_err("pthread_mutex_destroy");
+
 }
 
 
 int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
-	int 	n, new_x, new_y, fruit, player;
+	int 			n, new_x, new_y, fruit, player;
 
-	char 	buffer[BUFF_SIZE];
-	char 	buffer_aux[PIECE_SIZE];
+	char 			buffer[BUFF_SIZE];
+	char 			buffer_aux[PIECE_SIZE];
 
-	unsigned long id;
+	unsigned long 	id;
 
 	memset(buffer,' ',BUFF_SIZE*sizeof(char));
 
@@ -1227,7 +1234,7 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		/* enemy monster*/
 		else
 		{
-			monster_eats_pacman(board, row, col, x, y, prev_x, prev_y,1, ff_fd);
+			player_eats_player(board, row, col, x, y, prev_x, prev_y,1, ff_fd);
 			player = 1;
 		}
 	}
@@ -1250,6 +1257,12 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 		write_play_to_main(buffer,ff_fd);
 
 		fruit = 1;
+
+		/* updates curr fruits number*/
+		pthread_mutex_lock(&lock_cur);
+		status.cur_fruits--;
+		pthread_mutex_unlock(&lock_cur);
+
 
 		/* writes fruit*/
 		write_fruit(ft_fd, ff_fd, 0);
@@ -1289,12 +1302,6 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 	/* NON CRITICAL BOARD ZONE */
 	if(fruit)
 	{
-
-		/* updates curr fruits number*/
-		pthread_mutex_lock(&lock_cur);
-		status.cur_fruits--;
-		pthread_mutex_unlock(&lock_cur);
-
 		/* updates score */
 		pthread_rwlock_wrlock(&lock_clients);
 		inc_fruit_score(clients_head, pthread_self());
@@ -1466,7 +1473,7 @@ int power_pacman_movement(board_piece** board,int row, int col, int x, int y, in
 				reverse_pacman(board,prev_x,prev_y);
 			}
 
-			monster_eats_pacman(board, row, col, x, y, prev_x, prev_y, 0, ff_fd);
+			player_eats_player(board, row, col, x, y, prev_x, prev_y, 0, ff_fd);
 
 			/* sets flag a player was eaten*/
 			player = 1;
@@ -1485,6 +1492,12 @@ int power_pacman_movement(board_piece** board,int row, int col, int x, int y, in
 		n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
+
+		/* updates curr fruits number*/
+		pthread_mutex_lock(&lock_cur);
+		status.cur_fruits--;
+		pthread_mutex_unlock(&lock_cur);
+
 
 		/* writes fruit*/
 		write_fruit(ft_fd, ff_fd, 0);
@@ -1529,12 +1542,6 @@ int power_pacman_movement(board_piece** board,int row, int col, int x, int y, in
 	/* NON CRITICAL BOARD ZONE */
 	if(fruit)
 	{
-
-		/* updates curr fruits number*/
-		pthread_mutex_lock(&lock_cur);
-		status.cur_fruits--;
-		pthread_mutex_unlock(&lock_cur);
-
 		/* updates score */
 		pthread_rwlock_wrlock(&lock_clients);
 		inc_fruit_score(clients_head, pthread_self());
@@ -1554,12 +1561,12 @@ int power_pacman_movement(board_piece** board,int row, int col, int x, int y, in
 
 int monster_movement(board_piece** board, int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
-	int 	n, new_x, new_y, fruit, player;
+	int 			n, new_x, new_y, fruit, player;
 
-	char 	buffer[BUFF_SIZE];
-	char 	buffer_aux[PIECE_SIZE];
+	char 			buffer[BUFF_SIZE];
+	char 			buffer_aux[PIECE_SIZE];
 
-	unsigned long id;
+	unsigned long 	id;
 
 	fruit = player = 0;
 
@@ -1707,10 +1714,10 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		else
 		{
 			if(is_pacman(x,y,board))		/* normal pacman */
-				monster_eats_pacman(board, row, col, x, y, prev_x, prev_y, 0, ff_fd);
+				player_eats_player(board, row, col, x, y, prev_x, prev_y, 0, ff_fd);
 			else							/* power pacman */
 			{	
-				monster_eats_pacman(board, row, col, x, y, prev_x, prev_y, 1, ff_fd);
+				player_eats_player(board, row, col, x, y, prev_x, prev_y, 1, ff_fd);
 				id = get_id(board,x,y);
 			}
 
@@ -1730,6 +1737,11 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 		n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
 		buffer[n] = '\0';
 		write_play_to_main(buffer,ff_fd);
+
+		/* updates curr fruits number*/
+		pthread_mutex_lock(&lock_cur);
+		status.cur_fruits--;
+		pthread_mutex_unlock(&lock_cur);
 
 		/* writes fruit*/
 		write_fruit(ft_fd, ff_fd, 0);
@@ -1773,12 +1785,6 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 	/* NON CRITICAL BOARD ZONE */
 	if(fruit)
 	{
-
-		/* updates curr fruits number*/
-		pthread_mutex_lock(&lock_cur);
-		status.cur_fruits--;
-		pthread_mutex_unlock(&lock_cur);
-
 		/* updates score */
 		pthread_rwlock_wrlock(&lock_clients);
 		inc_fruit_score(clients_head, id);
@@ -1884,6 +1890,10 @@ void place_randoom_position(board_piece** board, int row, int col, int piece, in
 	new_col = rand()%col;
 	last_col = new_col;
 
+	pthread_mutex_lock(&lock_empty);
+	if (status.empty == 0) 									{pthread_mutex_unlock(&lock_empty); return;}
+	pthread_mutex_unlock(&lock_empty);
+
 	while(1)
 	{
 		/* tries to lock col*/
@@ -1928,7 +1938,7 @@ void place_randoom_position(board_piece** board, int row, int col, int piece, in
 	}
 }
 
-void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, int prev_x, int prev_y, int suicidal, int ff_fd)
+void player_eats_player(board_piece** board, int row, int col, int x, int y, int prev_x, int prev_y, int suicidal, int ff_fd)
 {
 
 	int 	new_row, new_col, n , last_col;
@@ -1942,88 +1952,9 @@ void monster_eats_pacman(board_piece** board, int row, int col, int x, int y, in
 	new_col = rand()%col;
 	last_col = new_col;
 
-	while(1)
-	{
-		/* tries to lock col*/
-		if (!pthread_mutex_trylock(&lock_col[new_col]))
-		{
-			/* tries to get a randoom row for n-rows attempts */
-			/* getting the right row - if there is any - can be seen as a bernoulli distribution with p = 1/n */
-			/* therefore expected number of trials until sucess is ~ 1/p  = n */
-			/* if it doesn't find a empty row within the n attempts it tries a new col*/
-			for (n = 0; n < row ; n++)
-			{
-
-				new_row = rand()%row;
-
-				if(is_empty(new_row, new_col,board))
-				{
-
-					/* pacman suicides into monster */
-					if (suicidal)
-					{
-						/* moves pacman */
-						move_and_clear(board, prev_x, prev_y, new_row, new_col);
-					}
-
-					/* monster hunts pacman*/
-					else 
-					{
-						/* moves pacman */
-						move(board,x, y, new_row, new_col);
-
-						/* moves monster and clears position*/
-						move_and_clear(board,prev_x, prev_y, x, y);
-						
-					}
-					
-
-					n = sprintf(buffer, "PT %s\n" , print_piece(board, x, y, buffer_aux));
-					buffer[n] = '\0';
-					write_play_to_main(buffer,ff_fd);
-
-					n = sprintf(buffer, "PT %s\n", print_piece(board, new_row, new_col,buffer_aux));
-					buffer[n] = '\0';
-					write_play_to_main(buffer,ff_fd);
-
-					n = sprintf(buffer, "CL %d:%d\n", prev_x, prev_y);
-					buffer[n] = '\0';
-					write_play_to_main(buffer,ff_fd);
-
-					/* unlocks col*/
-					pthread_mutex_unlock(&lock_col[new_col]);
-
-					return;
-				}
-			}
-
-			/* unlocks col*/
-			pthread_mutex_unlock(&lock_col[new_col]);
-		}
-
-		/*changes col - doesn't repeat last col*/
-		while(new_col==last_col)
-		{
-			last_col = new_col;
-			new_col = rand()%col;
-		}
-	}
-}
-
-
-void pacman_eats_monster(board_piece** board, int row, int col, int x, int y, int prev_x, int prev_y, int suicidal, int ff_fd)
-{
-
-	int 	new_row, new_col, n , last_col;
-	char 	buffer[BUFF_SIZE], buffer_aux[BUFF_SIZE];
-
-	memset(buffer,' ',BUFF_SIZE*sizeof(char));
-	memset(buffer_aux,' ',BUFF_SIZE*sizeof(char));
-
-	/* gets a column at randoom*/
-	srand(time(NULL));
-	new_col = rand()%col;
-	last_col = new_col;
+	pthread_mutex_lock(&lock_empty);
+	if (status.empty == 0) 									{pthread_mutex_unlock(&lock_empty); return;}
+	pthread_mutex_unlock(&lock_empty);
 
 	while(1)
 	{

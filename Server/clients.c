@@ -74,7 +74,9 @@ void add_client(client** client_list, unsigned long id, int fd, int* pac, int *m
 		new_cli->m_g = mon[1];
 		new_cli->m_b = mon[2];
 
-		new_cli->next = NULL;
+		new_cli->fruit_score = 0;
+		new_cli->player_score = 0;
+
 		new_cli->next = NULL;
 
 		/* links previous client to this*/
@@ -85,7 +87,6 @@ void add_client(client** client_list, unsigned long id, int fd, int* pac, int *m
 		return;
 	}
 }
-
 
 
 void print_clients(client * head)
@@ -112,13 +113,14 @@ void print_clients(client * head)
 
 client * search_client (client* head, unsigned long id)
 {
+	client* aux;
+
+	aux = head;
+
 	if(head == NULL)
 	{
 		return NULL;
 	}
-	client* aux;
-
-	aux = head;
   
 
     while (aux != NULL) 
@@ -173,7 +175,6 @@ void remove_client(client ** head, unsigned long id)
 
 
 void free_clients(client* head)
-
 {
 	client* aux;
 
@@ -191,12 +192,13 @@ void free_clients(client* head)
 
 void get_pac_rgb(client* head, unsigned long id, int* r, int* g, int*b)
 {
+	client* aux;
 
 	if(head == NULL)
 	{
 		return;
 	}
-	client* aux;
+	
 
 	aux = head;
 
@@ -279,8 +281,8 @@ int send_all_clients(client* head, char* msg, int msg_size)
 int number_of_clients(client* head)
 {
 
-	int i;
-	client* aux;
+	int 		i;
+	client* 	aux;
 
 	i = 0;
 
@@ -311,6 +313,8 @@ void inc_fruit_score(client* head, unsigned long id)
 		return;
 	}
 
+	aux = head;
+
 	while(aux != NULL)
 	{
 		if (aux->user_id == id)
@@ -329,11 +333,14 @@ void inc_player_score(client* head, unsigned long id)
 {
 	client* aux;
 
+
 	if(head == NULL)
 	{
 		return;
 	}
 
+	aux = head;
+	
 	while(aux != NULL)
 	{
 		if (aux->user_id == id)
@@ -351,8 +358,8 @@ void inc_player_score(client* head, unsigned long id)
 
 int print_score_buffer(client* head, char** buffer)
 {
-	int i,n;
-	client* aux;
+	int 		i,n;
+	client* 	aux;
 
 	if(head == NULL)
 	{
@@ -366,8 +373,7 @@ int print_score_buffer(client* head, char** buffer)
     while (aux != NULL) 
     {
   	
-    	n = sprintf(buffer[i],"SC PLAYER[%lx]\tFruits: %d\tPlayers: %d\n", aux->user_id, aux->fruit_score, aux->player_score);
-    	buffer[i][n] = '\0';
+    	sprintf(buffer[i],"SC PLAYER[%lx]\tFruits: %d\tPlayers: %d\n", aux->user_id, aux->fruit_score, aux->player_score);
     	i++;
 		aux = aux->next;
     }

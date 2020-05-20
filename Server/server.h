@@ -31,5 +31,5 @@ int 	bounce			(board_piece**,int,int,int,int,int,int,
 
 void 	place_randoom_position	(board_piece**, int, int, int, int*, int);
 
-void 	monster_eats_pacman	(board_piece**, int, int, int, int, int, int, int, int);
+void 	player_eats_player	(board_piece**, int, int, int, int, int, int, int, int);
 
