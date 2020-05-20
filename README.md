@@ -80,23 +80,23 @@ typedef struct board_infos{
 
 }board_info
 
-typedef struct client{
+typedef struct _client{
 
-   unsigned long user_id;
-   int fid;
+    unsigned long user_id;
+    int fid;
    
-   int p_r;
-   int p_g;
-   int p_b;
+    int p_r;
+    int p_g;
+    int p_b;
    
-   int m_r;
-   int m_g;
-   int m_b;
+    int m_r;
+    int m_g;
+    int m_b;
    
-   int fruit_score;
-   int player_score;
+    int fruit_score;
+    int player_score;
    
-   struct client *next;
+    struct _client *next;
 
-}client
+}client;
 
