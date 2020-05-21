@@ -1,9 +1,37 @@
+/******************************************************************************
+ *
+ * File Name: board.c
+ *
+ * Authors:   Grupo 24:
+ *            Inês Guedes 87202 
+ * 			  Manuel Domingues 84126
+ *
+ * DESCRIPTION
+ *		*     Contains all the functions that interact with the game's board.
+ *
+ *****************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
 #include "board.h"
+
+/******************************************************************************
+ * print_board() 
+ *
+ * Arguments:
+ *			int 	     - number of rows of the board
+ * 			int 		 - number of columns of the board
+ * 			board_pice** - board struct pointer
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Prints the board on stdout
+ *
+ ******************************************************************************/
 
 int print_board(int row, int col, board_piece** board)
 {
@@ -23,6 +51,20 @@ int print_board(int row, int col, board_piece** board)
 
 	return 0;
 }
+
+/******************************************************************************
+ * init_board() 
+ *
+ * Arguments:
+ *			void
+ * Returns:
+ *			board_info 	 - board info structure filled with init values
+ * Side-Effects:
+ *
+ * Description: Reads the file contaning board information and initializes
+ * 				the board as well as some information abou the board.
+ *
+ ******************************************************************************/
 
 board_info init_board()
 {
@@ -88,6 +130,21 @@ board_info init_board()
 	return bi;
 }
 
+/******************************************************************************
+ * empty_spaces() 
+ *
+ * Arguments:
+ *			int 	     - number of rows of the board
+ * 			int 		 - number of columns of the board
+ * 			board_pice** - board struct pointer
+ * Returns:
+ *			int 		 - number of empty pieces
+ * Side-Effects:
+ *
+ * Description: Counts the number of empty pieces in the board.
+ *
+ ******************************************************************************/
+
 
 int empty_spaces(int row, int col, board_piece** board)
 {
@@ -107,6 +164,22 @@ int empty_spaces(int row, int col, board_piece** board)
 	return empty;
 }
 
+/******************************************************************************
+ * print_piece() 
+ *
+ * Arguments:
+ * 			board_pice** - board struct pointer
+ *			int 	     - number of rows of the board
+ * 			int 		 - number of columns of the board
+ * 			char * 		 - buffer to save the return variable
+ * Returns:
+ *			char * 		 - received buffer filled with piece information
+ * Side-Effects:
+ *
+ * Description: Prints a default message contaning the piece information
+ * 				of the piece in the given column and row to a buffer.
+ *
+ ******************************************************************************/
 char* print_piece(board_piece ** board, int row, int col, char* buffer)
 {
 	int n;
@@ -118,6 +191,25 @@ char* print_piece(board_piece ** board, int row, int col, char* buffer)
 	return buffer;
 }
 
+/******************************************************************************
+ * place_piece() 
+ *
+ * Arguments:
+ * 			board_pice**  - board struct pointer
+ * 			int 		  - piece 
+ *			int 	      - x coordenate
+ * 			int 		  - y coordenate
+ * 			unsigned long - id of the owner of the piece
+ * 			int 		  - rgb r of the piece
+ * 			int 		  - rgb g of the piece
+ * 			int 		  - rgb b of the piece 
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Places a piece on the board,
+ *
+ ******************************************************************************/
 
 void place_piece(board_piece ** board, int piece, int row, int col, unsigned long id, int r, int g, int b)
 {
@@ -132,6 +224,22 @@ void place_piece(board_piece ** board, int piece, int row, int col, unsigned lon
 }
 
 
+/******************************************************************************
+ * switch_pieces() 
+ *
+ * Arguments:
+ * 			board_pice**  - board struct pointer
+ *			int 	      - x coordenate of piece 1
+ * 			int 		  - y coordenate of piece 1
+ *			int 	      - x coordenate of piece 2
+ * 			int 		  - y coordenate of piece 2
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Switches the pieces located on the coordenates received.
+ *
+ ******************************************************************************/
 void switch_pieces(board_piece** board, int row1, int row2, int col1, int col2)
 {
 	board_piece aux;
@@ -143,7 +251,20 @@ void switch_pieces(board_piece** board, int row1, int row2, int col1, int col2)
 	return; 
 }
 
-
+/******************************************************************************
+ * clear_board_place() 
+ *
+ * Arguments:
+ * 			board_pice**  - board struct pointer
+ *			int 	      - x coordenate 
+ * 			int 		  - y coordenate 
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Clears the position received
+ *
+ ******************************************************************************/
 void clear_board_place(board_piece ** board, int row, int col)
 {
 	board[row][col].piece = EMPTY;
@@ -153,6 +274,25 @@ void clear_board_place(board_piece ** board, int row, int col)
 	board[row][col].b = 0;
 }
 
+/******************************************************************************
+ * clear_player() 
+ *
+ * Arguments:
+ * 			board_pice**  - board struct pointer
+ *			int 	      - board number of rows
+ * 			int 		  - board number of columns
+ *			unsigned long - id of the player
+ * 			int* 		  - coordenates of the players pieces(empty). To be 
+ * 							filled by this functions.
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Searches the whole board for the pieces of the player
+ * 				with matching id. When it finds them, saves the coordenates
+ * 				in the input pointer and clears the board position.
+ *
+ ******************************************************************************/
 void clear_player(board_piece** board, int rows, int cols, unsigned long id, int* coord)
 {
 	int i, j;
@@ -178,6 +318,19 @@ void clear_player(board_piece** board, int rows, int cols, unsigned long id, int
 	return;
 }
 
+/******************************************************************************
+ * free_board() 
+ *
+ * Arguments:
+ * 			int 		  - number of rows
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Frees the board memory.
+ *
+ ******************************************************************************/
 void free_board(int row, board_piece** board)
 {
 	int i;
@@ -192,7 +345,20 @@ void free_board(int row, board_piece** board)
 	return;
 }
 
-
+/******************************************************************************
+ *  is_empty() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			int 		  - Returns 1 if is empty and 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a position is empty.
+ *
+ ******************************************************************************/
 int is_empty(int row, int col, board_piece** board)
 {
 	if(board[row][col].piece == EMPTY)
@@ -201,6 +367,20 @@ int is_empty(int row, int col, board_piece** board)
 		return 0;
 }
 
+/******************************************************************************
+ *  is_pacman() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			int 		  - Returns 1 if has a pacman and 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a position has a pacman.
+ *
+ ******************************************************************************/
 int is_pacman(int row, int col, board_piece** board)
 {
 	if(board[row][col].piece == PACMAN)
@@ -209,6 +389,20 @@ int is_pacman(int row, int col, board_piece** board)
 		return 0;
 }
 
+/******************************************************************************
+ *  is_power_pacman() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			int 		  - Returns 1 if has a power pacman and 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a position has a power pacman.
+ *
+ ******************************************************************************/
 int is_power_pacman(int row, int col, board_piece** board)
 {
 	if(board[row][col].piece == POWER_PACMAN)
@@ -217,6 +411,20 @@ int is_power_pacman(int row, int col, board_piece** board)
 		return 0;
 }
 
+/******************************************************************************
+ *  is_monster() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			int 		  - Returns 1 if has a monster and 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a position has a monster.
+ *
+ ******************************************************************************/
 int is_monster(int row, int col, board_piece** board)
 {
 	if(board[row][col].piece == MONSTER)
@@ -225,6 +433,20 @@ int is_monster(int row, int col, board_piece** board)
 		return 0;
 }
 
+/******************************************************************************
+ *  is_brick() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			int 		  - Returns 1 if has a brick and 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a position has a brick.
+ *
+ ******************************************************************************/
 int is_brick(int row, int col, board_piece** board)
 {
 	if(board[row][col].piece == BRICK)
@@ -233,6 +455,20 @@ int is_brick(int row, int col, board_piece** board)
 		return 0;
 }
 
+/******************************************************************************
+ *  is_any_fruit() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			int 		  - Returns 1 if has a fruit and 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a position has a fruit.
+ *
+ ******************************************************************************/
 int is_any_fruit(int row, int col, board_piece** board)
 {
 	if( (board[row][col].piece == LEMON ) || (board[row][col].piece == CHERRY))
@@ -241,11 +477,41 @@ int is_any_fruit(int row, int col, board_piece** board)
 		return 0;
 }
 
+/******************************************************************************
+ * get_id() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			board_pice**  - board struct pointer
+ * Returns:
+ *			unsigned long - id of the owner of the piece
+ * Side-Effects:
+ *
+ * Description: Gets the id of the owner of the piece in the received position.
+ *
+ ******************************************************************************/
 unsigned long int get_id(board_piece ** board, int row, int col)
 {
 	return board[row][col].user_id;
 }
 
+/******************************************************************************
+ * piece_is_correct() 
+ *
+ * Arguments:
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ *  		int 		  - piece
+ * 			unsigned long - id
+ * 			board_pice**  - board struct poin
+ * Returns:
+ *			int 		  - Returns 1 if it is correct, 0 otherwise.
+ * Side-Effects:
+ *
+ * Description: Checks if a piece is correct acording to the board.
+ *
+ ******************************************************************************/
 int piece_is_correct(int row, int col, int piece, unsigned long  id, board_piece** board)
 {
 	if ( (board[row][col].piece == piece) && (board[row][col].user_id == id) )
@@ -254,7 +520,24 @@ int piece_is_correct(int row, int col, int piece, unsigned long  id, board_piece
 		return 0;
 }
 
-
+/******************************************************************************
+ * move_and_clear() 
+ *
+ * Arguments:
+ *			board_pice**  - board struct pointer
+ * 			int 		  - previous x coordenate
+ * 			int 		  - previous y coordenate
+ * 			int 		  - destination x coordenate
+ * 			int 		  - destination y coordenate
+ * 			
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Moves a piece in the board, clears the place the piece was in
+ * 				before.
+ *
+ ******************************************************************************/
 void move_and_clear(board_piece** board, int row, int col, int to_row, int to_col)
 {
 	board_piece aux;
@@ -269,6 +552,22 @@ void move_and_clear(board_piece** board, int row, int col, int to_row, int to_co
 
 }
 
+/******************************************************************************
+ * move() 
+ *
+ * Arguments:
+ *			board_pice**  - board struct pointer
+ * 			int 		  - previous x coordenate
+ * 			int 		  - previous y coordenate
+ * 			int 		  - destination x coordenate
+ * 			int 		  - destination y coordenate
+ * 			
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Moves a piece in the board.
+ ******************************************************************************/
 void move (board_piece** board, int row, int col, int to_row, int to_col)
 {
 	board_piece aux;
@@ -280,7 +579,21 @@ void move (board_piece** board, int row, int col, int to_row, int to_col)
 	return;
 }
 
-
+/******************************************************************************
+ * transform_pacman() 
+ *
+ * Arguments:
+ *			board_pice**  - board struct pointer
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Upgrades pacman to super pacman.
+ *
+ ******************************************************************************/
 void transform_pacman(board_piece** board, int row, int col, int counter)
 {
 	/* safety check */
@@ -291,6 +604,21 @@ void transform_pacman(board_piece** board, int row, int col, int counter)
 	}
 }
 
+/******************************************************************************
+ * reverse_pacman() 
+ *
+ * Arguments:
+ *			board_pice**  - board struct pointer
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Downgrades pacman to normal pacman.
+ *
+ ******************************************************************************/
 void reverse_pacman(board_piece** board, int row, int col)
 {
 	/* safety check */
@@ -302,6 +630,23 @@ void reverse_pacman(board_piece** board, int row, int col)
 }
 
 
+/******************************************************************************
+ * decrement_counter() 
+ *
+ * Arguments:
+ *			board_pice**  - board struct pointer
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			
+ * Returns:
+ *			int 		  - counter current number if super pacman
+ * 							otherwise -1.
+ * Side-Effects:
+ *
+ * Description: Decrements piece counter. Used to regulate pacman/power pacman
+ * 				transformation.
+ *
+ ******************************************************************************/
 int decrement_counter(board_piece** board, int row, int col)
 {
 	/* safety check */
@@ -314,6 +659,23 @@ int decrement_counter(board_piece** board, int row, int col)
 	return -1;
 }
 
+/******************************************************************************
+ * decrement_counter() 
+ *
+ * Arguments:
+ *			board_pice**  - board struct pointer
+ * 			int 		  - x coordenate
+ * 			int 		  - y coordenate
+ * 			
+ * Returns:
+ *			int 		  - counter current number if super pacman
+ * 							otherwise -1.
+ * Side-Effects:
+ *
+ * Description: Uncrements piece counter. Used to regulate pacman/power pacman
+ * 				transformation.
+ *
+ ******************************************************************************/
 int increment_counter(board_piece** board, int row, int col)
 {
 	/* safety check */

@@ -1,3 +1,18 @@
+/******************************************************************************
+ *
+ * File Name: server.c
+ *
+ * Authors:   Grupo 24:
+ *            Inês Guedes 87202 
+ * 			  Manuel Domingues 84126
+ *
+ * DESCRIPTION
+ *		*     Implementation of the server node. Responsible for implementing
+ * 			  the user interface, execute all the game functionalities and 
+ * 			  handle client interaction.
+ *
+ *****************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,8 +40,16 @@
 #include "server.h"
 
 
+                 /***************************************
+                 *          GLOBAL VARIABLES            *
+                 * *************************************/
+
+
+/* list to the head of the clients list */
 client* clients_head;
 
+
+/* struct with the board information */
 board_info status;
 
 /*
@@ -42,24 +65,30 @@ typedef struct board_infos{
 }board_info;
 */
 
-pthread_mutex_t * lock_col;
+/* locks for the status and client structures */
 
-pthread_mutex_t   lock_empty;
+pthread_mutex_t * lock_col; 			/* locks with the column index - one mutex per column*/
 
-pthread_mutex_t   lock_fruits;
+pthread_mutex_t   lock_empty;			/* locks board_info.empty field */
 
-pthread_mutex_t   lock_cur;
+pthread_mutex_t   lock_fruits;  		/* locks board_info.max_fruits field */
 
-pthread_mutex_t   lock_success;
+pthread_mutex_t   lock_cur;				/* locks board_info.cur_fruits field */
 
-pthread_rwlock_t  lock_clients;
+pthread_rwlock_t  lock_clients;			/* locks access to client list in a read/write fashion */
 
-pthread_cond_t    shut_down_success;
+pthread_mutex_t   lock_success; 		/* locks conditional variable shutdown success */
 
+pthread_cond_t    shut_down_success; 	/* signals shutdown succes from all client threads */
 
+/* debug flag */
 volatile int debug;
+
+/* shutdown flag */
 volatile int shut_down;
 
+
+/* SIGINT handler for server shutdown */
 void handler (int sigtype)
 {
 	shut_down = 1;
@@ -152,7 +181,23 @@ int main(int argc, char** argv)
 	exit(0);
 }
 
+                 /***************************************
+                 *              THREADS                 *
+                 * *************************************/
 
+/******************************************************************************
+ * main_thread() 
+ *
+ * Arguments:
+ *			void 
+ * Returns:
+ *			int  - Returns 0 if it detects a shudown, -1 on error.
+ * Side-Effects:
+ *
+ * Description: Reads the plays sent from all the threads, plots them on the 
+ * 				server side SDL window and sends them to all clients.
+ *
+ ******************************************************************************/
 int main_thread()
 {
 
@@ -223,6 +268,23 @@ int main_thread()
 	return 0;
 }
 
+/******************************************************************************
+ * fruity_thread() 
+ *
+ * Arguments:
+ *			void *
+ * Returns:
+ *			void *   - NULL
+ * Side-Effects:
+ *
+ * Description: Thread responsible for handling all the fruit spawns. It reads
+ * 				all client threads requests, checks if the max number of fruits
+ * 				is already on board, if not, it will calculate the time diference
+ * 				from the request made and the time it reads the request. It will
+ * 				subtract this value to the fruit spawn time and sleep for that
+ * 				amount of time, releasing the processor.
+ *
+ ******************************************************************************/
 
 void * fruity_thread (void* arg)
 {
@@ -333,7 +395,21 @@ void * fruity_thread (void* arg)
 	return NULL;
 }
 
-
+/******************************************************************************
+ * score_thread() 
+ *
+ * Arguments:
+ *			void *
+ * Returns:
+ *			void *   - NULL
+ * Side-Effects:
+ *
+ * Description: Thread responsible for sending all clients the score. It will
+ * 				be sleeping for most of the time while waiting for the score
+ * 				to be sent again. It will also release the processor when 
+ * 				sleeping.
+ *
+ ******************************************************************************/
 void * score_thread (void* arg)
 {
 	
@@ -410,6 +486,21 @@ void * score_thread (void* arg)
 	return NULL;
 }
 
+/******************************************************************************
+ * accept_thread() 
+ *
+ * Arguments:
+ *			void *   - pointer to server socket (empty). To be filled by this
+ * 					   thread in order for the main thread to be able to close
+ * 					   the socket.
+ * Returns:
+ *			void *   - NULL
+ * Side-Effects:
+ *
+ * Description: Thread responsible for waiting for new client connections.
+ * 				It will actively wait for a connection request and then create
+ * 				a client thread to handle the new client.
+ ******************************************************************************/
 void * accept_thread (void* arg)
 {
 	
@@ -485,7 +576,19 @@ void * accept_thread (void* arg)
 	return NULL;
 }
 
-
+/******************************************************************************
+ * client_thread() 
+ *
+ * Arguments:
+ *			void *   - pointer to socket ID file.
+ * Returns:
+ *			void *   - NULL
+ * Side-Effects:
+ *
+ * Description: Thread responsible for handling client messages. It will check
+ * 				for the client message correctness and ignore all messages
+ * 				that contain wrong values or don't follow the protocol.
+ ******************************************************************************/
 void * client_thread (void* arg)
 {
 	int  	n, fd, ff_fd, ft_fd;
@@ -536,7 +639,30 @@ void * client_thread (void* arg)
 	return NULL;
 }
 
+                 /***************************************
+                 *       AUXILIAR (THREAD) FUNCTIONS    *
+                 * *************************************/
 
+
+
+/******************************************************************************
+ * client_setup() 
+ *
+ * Arguments:
+ *			int      - socket ID file.
+ * 			int * 	 - pointer to plays fifo file (empty). To be filed by this 
+ 					   function.
+ * 			int *    - pointer to fruits fifo file (empty). To be filed by this 
+ 					   function.
+ * Returns:
+ *			void *   - NULL
+ * Side-Effects:
+ *
+ * Description: Called by client thread. Establishes client connection and 
+ * 				sends all needed information (board, pieces) to the client.
+ * 				Generates client coordenates and adds client to list. Updates
+ * 				number of max fruits and empty places.
+ ******************************************************************************/
 int client_setup(int fd, int* pff_fd, int* pft_fd)
 {	
 
@@ -646,6 +772,8 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 
 	if ( sscanf(buffer, "%*s [%d,%d,%d] [%d,%d,%d]\n", &pac_rgb[0], &pac_rgb[1], &pac_rgb[2], &mon_rgb[0], &mon_rgb[1], &mon_rgb[2] ) != 6) 	{inv_format(buffer); return -1;}
 
+	/* checks if client's rgb is correct */
+	if ((rgb_verf(pac_rgb[0], pac_rgb[1], pac_rgb[2]) == -1) || (rgb_verf(mon_rgb[0], mon_rgb[1], mon_rgb[2]) == -1)) return -1;
 	/*places pacman and monster in randoom positions*/
 
 	place_randoom_position(status.board, status.row, status.col, PACMAN,  pac_rgb, *pff_fd);
@@ -725,6 +853,21 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 	return 0;
 }
 
+/******************************************************************************
+ * client_loop() 
+ *
+ * Arguments:
+ *			int      - socket ID file.
+ * 			int 	 - plays fifo file.
+ * 			int      - fruits fifo file
+ * Returns:
+ *			int      - Returns -1 on error or broken connection.
+ * Side-Effects:
+ *
+ * Description: Called by client thread. Implements the client loop. It reads 
+ * 				all incoming messages from the client, checks for its correctness
+ * 				and writes the plays to the board and main.
+ ******************************************************************************/
 
 int client_loop(int fd, int ff_fd, int ft_fd)
 {
@@ -897,7 +1040,22 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 	return 0;
 }
 
-
+/******************************************************************************
+ * client_disconnect() 
+ *
+ * Arguments:
+ *			int      - socket ID file.
+ * 			int 	 - plays fifo file.
+ * 			int      - fruits fifo file
+ * Returns:
+ *			int      - Returns -1 on error or broken connection.
+ * Side-Effects:
+ *
+ * Description: Called by client thread. Implements the client disconnect
+ * 				Only called on a error in setup or a disconnect from the client
+ * 				side. It cleans up the client from the board, client list and
+ * 				user interface. Updates number of max fruits and empty places.
+ ******************************************************************************/
 void client_disconnect(int fd, int ff_fd, int ft_fd)
 {
 	int 	n;
@@ -959,7 +1117,20 @@ void client_disconnect(int fd, int ff_fd, int ft_fd)
 	if(ft_fd != -1) 	close(ft_fd);
 }
 
-
+/******************************************************************************
+ * write_play_to_main() 
+ *
+ * Arguments:
+ *			char *   - message to be printed
+ * 			int 	 - plays fifo file.
+ * Returns:
+ *			int      - Returns -1 on error, 0 on success.
+ * Side-Effects:
+ *
+ * Description: Called by client thread and fruit thread. Writes to the main
+ * 				thread the plays to send to the users and display on the 
+ * 				interface.
+ ******************************************************************************/
 int write_play_to_main(char* play, int fd)
 {
 
@@ -974,7 +1145,24 @@ int write_play_to_main(char* play, int fd)
 	return 0;
 }
 
-
+/******************************************************************************
+ * write_fruit() 
+ *
+ * Arguments:
+ *			int      - fruits fifo file.
+ * 			int 	 - plays fifo file.
+ * 			int   	 - flag (0 - if its a spawn request on the normal time)
+ 							(1 - if its a imediate spawn request)
+ * Returns:
+ *			int      - Returns -1 on error, 0 on success.
+ * Side-Effects:
+ *
+ * Description: Called by client thread when it needs a fruit to be placed on 
+ * 				board. If it is during the setup, it will ask for a imediate 
+ * 				spawn and the fruit will be printed right away, if not, it 
+ * 				will build a message with the current time and sent it to the
+ * 				fruit thread to process.
+ ******************************************************************************/
 int write_fruit(int ft_fd, int fd, int now)
 {
 	
@@ -1028,6 +1216,21 @@ int write_fruit(int ft_fd, int fd, int now)
 	return 0;
 }
 
+/******************************************************************************
+ * server_disconnect() 
+ *
+ * Arguments:
+ *			void
+ * 		
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Cleans up the server. Closes the board interface window. Free's
+ * 				the board memory, waits for all clients threads to finish 
+ * 				execution and notify the client of the disconnect. Free's client
+ * 				list and destroys all mutexes.
+ ******************************************************************************/
 void server_disconnect()
 {
 	int 	i;
@@ -1082,7 +1285,34 @@ void server_disconnect()
 
 }
 
+                 /***************************************
+                 *         GAME RELATED FUNCTIONS       *
+                 * *************************************/
 
+
+/******************************************************************************
+ * pacman_movement() 
+ *
+ * Arguments:
+ *			board_piece** 	- pointer to the board struct.
+ * 			int 			- number of rows of the board.
+ * 			int 			- number of cols of the board.
+ * 			int 			- destination x coordenate.
+ * 			int 			- destination y coordenate.
+ * 			int 			- previous x coordenate.
+ * 			int 			- previous y coordenate.
+ * 			int 			- plays fifo file.
+ * 			int 			- fruits fifo file.
+ * 			int * 			- rgb colours of the piece.
+ * Returns:
+ *			int      - Returns 0 if the piece didn't move, 1 if it moved
+ * Side-Effects:
+ *
+ * Description: Handles pacman movement, responsable for checking type of
+ * 				movement and making the necessary changes accordingly. 
+ * 				Sends the main thread the information about the movement
+ * 				made.
+ ******************************************************************************/
 int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
 	int 			n, new_x, new_y, fruit, player;
@@ -1319,7 +1549,29 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 	return 1;
 }
 
-
+/******************************************************************************
+ * power_pacman_movement() 
+ *
+ * Arguments:
+ *			board_piece** 	- pointer to the board struct.
+ * 			int 			- number of rows of the board.
+ * 			int 			- number of cols of the board.
+ * 			int 			- destination x coordenate.
+ * 			int 			- destination y coordenate.
+ * 			int 			- previous x coordenate.
+ * 			int 			- previous y coordenate.
+ * 			int 			- plays fifo file.
+ * 			int 			- fruits fifo file.
+ * 			int * 			- rgb colours of the piece.
+ * Returns:
+ *			int      - Returns 0 if the piece didn't move, 1 if it moved
+ * Side-Effects:
+ *
+ * Description: Handles power pacman movement, responsable for checking type of
+ * 				movement and making the necessary changes accordingly. 
+ * 				Sends the main thread the information about the movement
+ * 				made.
+ ******************************************************************************/
 int power_pacman_movement(board_piece** board,int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
 	int 	n, new_x, new_y, fruit, player;
@@ -1559,6 +1811,29 @@ int power_pacman_movement(board_piece** board,int row, int col, int x, int y, in
 	return 1;
 }
 
+/******************************************************************************
+ * monster_movement() 
+ *
+ * Arguments:
+ *			board_piece** 	- pointer to the board struct.
+ * 			int 			- number of rows of the board.
+ * 			int 			- number of cols of the board.
+ * 			int 			- destination x coordenate.
+ * 			int 			- destination y coordenate.
+ * 			int 			- previous x coordenate.
+ * 			int 			- previous y coordenate.
+ * 			int 			- plays fifo file.
+ * 			int 			- fruits fifo file.
+ * 			int * 			- rgb colours of the piece.
+ * Returns:
+ *			int      - Returns 0 if the piece didn't move, 1 if it moved
+ * Side-Effects:
+ *
+ * Description: Handles monster movement, responsable for checking type of
+ * 				movement and making the necessary changes accordingly. 
+ * 				Sends the main thread the information about the movement
+ * 				made.
+ ******************************************************************************/
 int monster_movement(board_piece** board, int row, int col, int x, int y, int prev_x , int prev_y, int ff_fd, int ft_fd, int* rgb)
 {
 	int 			n, new_x, new_y, fruit, player;
@@ -1802,6 +2077,26 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 	return 1;
 }
 
+/******************************************************************************
+ * bounce() 
+ *
+ * Arguments:
+ *			board_piece** 	- pointer to the board struct.
+ * 			int 			- number of rows of the board.
+ * 			int 			- number of cols of the board.
+ * 			int 			- destination x coordenate.
+ * 			int 			- destination y coordenate.
+ * 			int 			- previous x coordenate.
+ * 			int 			- previous y coordenate.
+ * 			int * 			- pointer to new x coordenate
+ * 			int *			- pointer to new y coordenate
+ * Returns:
+ *			int      - Returns 0 if the piece didn't move, 1 if it moved
+ * Side-Effects:
+ *
+ * Description: Calculates if the movement will result in a bounce or not
+ * 				if it does updates the x and y coordenate to the input pointers.
+ ******************************************************************************/
 int bounce(board_piece** board, int row, int col,int x, int y, int prev_x, int prev_y, int *new_x, int*new_y)
 {
 
@@ -1876,6 +2171,23 @@ int bounce(board_piece** board, int row, int col,int x, int y, int prev_x, int p
 	return 1;
 }
 
+/******************************************************************************
+ * place_randoom_position() 
+ *
+ * Arguments:
+ *			board_piece** 	- pointer to the board struct.
+ * 			int 			- number of rows of the board.
+ * 			int 			- number of cols of the board.
+ * 			int 			- piece
+ * 			int* 			- rgb colours of the piece.
+ * 			int 			- plays fifo file.
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Places the piece received in a new empty position. If there are
+ * 				no empty positions, it leaves the piece where it is.
+ ******************************************************************************/
 void place_randoom_position(board_piece** board, int row, int col, int piece, int* rgb, int ff_fd)
 {
 	int 	new_row, new_col, n , last_col;
@@ -1938,6 +2250,27 @@ void place_randoom_position(board_piece** board, int row, int col, int piece, in
 	}
 }
 
+/******************************************************************************
+ * player_eats_player() 
+ *
+ * Arguments:
+ *			board_piece** 	- pointer to the board struct.
+ * 			int 			- number of rows of the board.
+ * 			int 			- number of cols of the board.
+ * 			int 			- destination x coordenate.
+ * 			int 			- destination y coordenate.
+ * 			int 			- previous x coordenate.
+ * 			int 			- previous y coordenate.
+ * 			int 			- flag indicating if the player suicided (1)
+ 														   was eaten (0)
+ * 			int 			- plays fifo file.
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Places the dead piece in a new empty position. If there are
+ * 				no empty positions, it leaves the piece where it is.
+ ******************************************************************************/
 void player_eats_player(board_piece** board, int row, int col, int x, int y, int prev_x, int prev_y, int suicidal, int ff_fd)
 {
 

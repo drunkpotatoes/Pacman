@@ -1,3 +1,16 @@
+/******************************************************************************
+ *
+ * File Name: clients.c
+ *
+ * Authors:   Grupo 24:
+ *            Inês Guedes 87202 
+ * 			  Manuel Domingues 84126
+ *
+ * DESCRIPTION
+ *		*     Contains all the functions that interact with the client list.
+ *
+ *****************************************************************************/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +31,22 @@
 
 #include "clients.h"
 
-
+/******************************************************************************
+ * add_client() 
+ *
+ * Arguments:
+ *			client** 	  - address of the pointer to the head of the list
+ * 			unsigned long - client id
+ * 			int 		  - client socket file
+ * 			int * 		  - client pacman colors
+ * 			int * 		  - client monster colors
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Adds client to the list.
+ *
+ ******************************************************************************/
 void add_client(client** client_list, unsigned long id, int fd, int* pac, int *mon)
 {
 	client* new_cli;
@@ -89,6 +117,18 @@ void add_client(client** client_list, unsigned long id, int fd, int* pac, int *m
 }
 
 
+/******************************************************************************
+ * prints_clients() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Prints all clients on stdout.
+ *
+ ******************************************************************************/
 void print_clients(client * head)
 {
 	client* aux;
@@ -110,7 +150,19 @@ void print_clients(client * head)
     }
 }
 
-
+/******************************************************************************
+ * search_client() 
+ *
+ * Arguments:
+ *			client* 	  - pointer to the head of the list
+ * 			unsigned long - client id
+ * Returns:
+ *			client * 	  - pointer to requested client
+ * Side-Effects:
+ *
+ * Description: Prints all clients on stdout.
+ *
+ ******************************************************************************/
 client * search_client (client* head, unsigned long id)
 {
 	client* aux;
@@ -138,7 +190,19 @@ client * search_client (client* head, unsigned long id)
     return NULL;
 }
 
-
+/******************************************************************************
+ * remove_client() 
+ *
+ * Arguments:
+ *			client** 	  - address pointer to the head of the list
+ * 			unsigned long - client id
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Removes client with matching id from the list.
+ *
+ ******************************************************************************/
 void remove_client(client ** head, unsigned long id)
 {
 
@@ -173,7 +237,18 @@ void remove_client(client ** head, unsigned long id)
     return;
 }
 
-
+/******************************************************************************
+ * free_client() 
+ *
+ * Arguments:
+ *			client* 	  - pointer to the head of the list
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: frees client list.
+ *
+ ******************************************************************************/
 void free_clients(client* head)
 {
 	client* aux;
@@ -189,7 +264,22 @@ void free_clients(client* head)
 	return;
 }
 
-
+/******************************************************************************
+ * get_pac_rgb() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * 			unsigned long - client id
+ * 			int * 		  - address of r (to be filed by this function)
+ * 			int * 		  - address of g (to be filed by this function)
+ * 			int * 		  - address of b (to be filed by this function)
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Gets pacman RGB of matching id client.
+ *
+ ******************************************************************************/
 void get_pac_rgb(client* head, unsigned long id, int* r, int* g, int*b)
 {
 	client* aux;
@@ -220,6 +310,23 @@ void get_pac_rgb(client* head, unsigned long id, int* r, int* g, int*b)
 
 	return;
 }
+
+/******************************************************************************
+ * get_mon_rgb() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * 			unsigned long - client id
+ * 			int * 		  - address of r (to be filed by this function)
+ * 			int * 		  - address of g (to be filed by this function)
+ * 			int * 		  - address of b (to be filed by this function)
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Gets monster RGB of matching id client.
+ *
+ ******************************************************************************/
 
 void get_mon_rgb(client* head, unsigned long id ,int* r, int* g, int* b)
 {
@@ -253,7 +360,20 @@ void get_mon_rgb(client* head, unsigned long id ,int* r, int* g, int* b)
 	return;
 }
 
-
+/******************************************************************************
+ * send_all_clients() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ *			char* 		  - message to be sent
+ *			int 		  - message size
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Sends a message to all clients in the list
+ *
+ ******************************************************************************/
 int send_all_clients(client* head, char* msg, int msg_size)
 {
 	client* aux;
@@ -277,7 +397,18 @@ int send_all_clients(client* head, char* msg, int msg_size)
     return 0;
 }
 
-
+/******************************************************************************
+ * number_of_clients() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * Returns:
+ *			int 		  - number of clients
+ * Side-Effects:
+ *
+ * Description: Counts number of clients.
+ *
+ ******************************************************************************/
 int number_of_clients(client* head)
 {
 
@@ -303,7 +434,19 @@ int number_of_clients(client* head)
     return i;
 }
 
-
+/******************************************************************************
+ * inc_fruit_score() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * 			unsigned long - client id
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Increments player's fruit score with matching id.
+ *
+ ******************************************************************************/
 void inc_fruit_score(client* head, unsigned long id)
 {
 	client* aux;
@@ -329,6 +472,19 @@ void inc_fruit_score(client* head, unsigned long id)
 	return;
 }
 
+/******************************************************************************
+ * inc_player_score() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * 			unsigned long - client id
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Increments player's player score with matching id.
+ *
+ ******************************************************************************/
 void inc_player_score(client* head, unsigned long id)
 {
 	client* aux;
@@ -340,7 +496,7 @@ void inc_player_score(client* head, unsigned long id)
 	}
 
 	aux = head;
-	
+
 	while(aux != NULL)
 	{
 		if (aux->user_id == id)
@@ -355,7 +511,19 @@ void inc_player_score(client* head, unsigned long id)
 	return;
 }
 
-
+/******************************************************************************
+ * print_score_buffer() 
+ *
+ * Arguments:
+ *			client* 	  - address pointer to the head of the list
+ * 			char** 		  - pointer to buffer 
+ * Returns:
+ *			void
+ * Side-Effects:
+ *
+ * Description: Printes all client's score in the buffer received.
+ *
+ ******************************************************************************/
 int print_score_buffer(client* head, char** buffer)
 {
 	int 		i,n;
