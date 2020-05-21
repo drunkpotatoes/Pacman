@@ -1,3 +1,20 @@
+/******************************************************************************
+ *
+ * File Name: client.c
+ *
+ * Authors:   Grupo 24:
+ *            Inês Guedes 87202 
+ * 			  Manuel Domingues 84126
+ *
+ * DESCRIPTION
+ *		*     Implementation of the client node. Responsible for implementing
+ * 			  the user interface, handle user input, and comunicating with
+ * 			  the server.
+ *
+ *****************************************************************************/
+
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -20,37 +37,152 @@
 #include "client.h"
 
 
+
+                 /***************************************
+                 *          GLOBAL VARIABLES            *
+                 * *************************************/
+
+
+/* Pacman and monster RGB */
 int RGB_PAC[3];
 int RGB_MON[3];
 
-
+/* Pacman and monster current position */
 int pacman_xy[2];
 int monster_xy[2];
 
+/* Pacman current format - [PACMAN/SUPER_PACMAN]*/
 int pac_format;
 
-
+/* User id on the server side*/
 unsigned long my_id;
+
+/* Enable debug variable*/
 volatile int debug;
 
+/* SDL Event to plot a piece */
 Uint32 Event_ShowSomething;
 
+
+int main(int argc, char** argv)
+{
+
+	int 					fd;
+	pthread_t 				thread_id;
+
+	char					ip[16];
+	char 					port[6];
+
+	struct 	sigaction 		action_sig_pipe;
+
+	if(argc!=9)
+	{
+		fprintf(stderr, "Usage: pacman <server ip address> <port number> <pacman r> <pacman g> <pacman b> <monster r> <monster g> <monster b>\n");
+		exit(0);
+	}
+
+
+	if(ip_verf(argv[1]) == 0)
+	{
+		strcpy(ip, argv[1]);
+	}
+	else 			exit(0);
+
+
+	if(port_verf(argv[2]) == 0)
+	{
+		strcpy(port, argv[2]);
+	}
+	else 			exit(0);
+
+	if(rgb_verf(argv[3], argv[4], argv[5]) == 0)
+	{
+		RGB_PAC[0] = atoi(argv[3]);
+		RGB_PAC[1] = atoi(argv[4]);
+		RGB_PAC[2] = atoi(argv[5]);
+	}
+
+	else 			exit(0);
+
+	if(rgb_verf(argv[6], argv[7], argv[8]) == 0)
+	{
+		RGB_MON[0] = atoi(argv[6]);
+		RGB_MON[1] = atoi(argv[7]);
+		RGB_MON[2] = atoi(argv[8]);
+	}
+
+	else 			exit(0);
+
+
+	pac_format = PACMAN;
+
+
+
+   	/* sets ignore to sig pipe signal*/
+   	memset(&action_sig_pipe, 0 , sizeof(struct sigaction));
+	action_sig_pipe.sa_handler = SIG_IGN;
+	sigemptyset(&action_sig_pipe.sa_mask);
+	sigaction(SIGPIPE, &action_sig_pipe, NULL);
+
+
+	debug = 0;
+	
+	
+
+	/* sets up server connetion)*/
+	if ( (server_setup(&fd, ip, port) ) == -1) 			server_disconnect(fd);
+	
+	/* creates thread to listem to server*/
+	/* this thread will update the SDL event*/
+	if (pthread_create(&thread_id , NULL, server_listen_thread, (void*) &fd)) 		{func_err("pthread_create"); exit(0);}
+	if (pthread_detach(thread_id)) 													{func_err("pthread_detach"); exit(0);}
+
+	
+
+	/* game loop will send the moves to the server*/
+	/* it will also print what it receives from the listen server thread*/
+	if (game_loop(fd) == -1) 					server_disconnect(fd);
+
+
+	close(fd);
+
+
+	getchar();
+
+	return 0;
+}
+
+/******************************************************************************
+ * server_listen() 
+ *
+ * Arguments:
+ *			void * - pointer to socket file ID.
+ * Returns:
+ *			void * - NULL
+ * Side-Effects:
+ *
+ * Description: Listen to all server comunication. If it receives a piece it
+ * 				Push a SQL ShowSomething Event, if it receives the score board
+ * 				it will print it, if it receives a disconnect message it will
+ * 				push a SQL Quit event. In advance it will also save the current
+ * 				position of its pacman and monster as well as pacman format.
+ *
+ ******************************************************************************/
 void* server_listen_thread(void * arg)
 {
 	
-	int fd,n,x,y,r,g,b,piece;
+	int 						fd,n,x,y,r,g,b,piece;
 
-	char buffer[BUFF_SIZE];
-	char buffer_aux[BUFF_SIZE];
+	char 						buffer[BUFF_SIZE];
+	char 						buffer_aux[BUFF_SIZE];
 
+	unsigned long 				id;
 
-	unsigned long id;
+	struct timeval 				tv;
 
-	struct timeval tv;
+	SDL_Event 					event;
+	Event_ShowSomething_Data 	* event_data;
 
-
-	SDL_Event event;
-	Event_ShowSomething_Data * event_data;
 
 	memset(buffer, ' ', BUFF_SIZE*sizeof(char));
 	memset(buffer_aux, ' ', BUFF_SIZE*sizeof(char));
@@ -69,7 +201,7 @@ void* server_listen_thread(void * arg)
 	{
 
 		/* waits for server message*/
-		if (( n = recv(fd, buffer, BUFF_SIZE, 0) ) == -1) 										return NULL;
+		if (( n = recv(fd, buffer, BUFF_SIZE, 0) ) == -1) 												return NULL;
 
 		buffer[n] = '\0';
 
@@ -83,7 +215,7 @@ void* server_listen_thread(void * arg)
 			if (sscanf(buffer, "%*s %d @ %d:%d [%d,%d,%d] # %lx", &piece,&y,&x,&r,&g,&b, &id) != 7)		{inv_format(buffer); return NULL;}
 
 			/* allocates memory for event struct */
-			if ( (event_data = malloc(sizeof(Event_ShowSomething_Data)) )== NULL) 					mem_err("event_data");
+			if ( (event_data = malloc(sizeof(Event_ShowSomething_Data)) )== NULL) 						mem_err("event_data");
 
 			/* assigns values*/
 			event_data->x = x;	event_data->y = y;	event_data->piece = piece;	event_data->r = r;	event_data->g = g;	event_data->b = b;
@@ -179,94 +311,22 @@ void* server_listen_thread(void * arg)
 	}
 }
 
-
-int main(int argc, char** argv)
-{
-
-	int 					fd;
-	pthread_t 				thread_id;
-
-	char					ip[16];
-	char 					port[6];
-
-	struct 	sigaction 		action_sig_pipe;
-
-	if(argc!=9)
-	{
-		fprintf(stderr, "Usage: pacman <server ip address> <port number> <pacman r> <pacman g> <pacman b> <monster r> <monster g> <monster b>\n");
-		exit(0);
-	}
-
-
-	if(ip_verf(argv[1]) == 0)
-	{
-		strcpy(ip, argv[1]);
-	}
-	else 			exit(0);
-
-
-	if(port_verf(argv[2]) == 0)
-	{
-		strcpy(port, argv[2]);
-	}
-	else 			exit(0);
-
-	if(rgb_verf(argv[3], argv[4], argv[5]) == 0)
-	{
-		RGB_PAC[0] = atoi(argv[3]);
-		RGB_PAC[1] = atoi(argv[4]);
-		RGB_PAC[2] = atoi(argv[5]);
-	}
-
-	else 			exit(0);
-
-	if(rgb_verf(argv[6], argv[7], argv[8]) == 0)
-	{
-		RGB_MON[0] = atoi(argv[6]);
-		RGB_MON[1] = atoi(argv[7]);
-		RGB_MON[2] = atoi(argv[8]);
-	}
-
-	else 			exit(0);
-
-
-	pac_format = PACMAN;
-
-
-
-   	/* sets ignore to sig pipe signal*/
-   	memset(&action_sig_pipe, 0 , sizeof(struct sigaction));
-	action_sig_pipe.sa_handler = SIG_IGN;
-	sigemptyset(&action_sig_pipe.sa_mask);
-	sigaction(SIGPIPE, &action_sig_pipe, NULL);
-
-
-	debug = 0;
-	
-	
-
-	/* sets up server connetion)*/
-	if ( (server_setup(&fd, ip, port) ) == -1) 			server_disconnect(fd);
-	
-	/* creates thread to listem to server*/
-	/* this thread will update the SDL event*/
-	pthread_create(&thread_id , NULL, server_listen_thread, (void*) &fd);
-
-	
-
-	/* game loop will send the moves to the server*/
-	/* it will also print what it receives from the listen server thread*/
-	if (game_loop(fd) == -1) 					server_disconnect(fd);
-
-
-	close(fd);
-
-
-	getchar();
-
-	return 0;
-}
-
+/******************************************************************************
+ * game_loop()
+ *
+ * Arguments:
+ *			int    -  socket file ID.
+ * Returns:
+ *			int    -  returns -1 on broken connection eitheir from the server
+ * 					  or from the client side - by closing the SDL window.
+ * Side-Effects:
+ *
+ * Description: This function is responsable for the handling the user
+ * 				interface and user input. It will use a SDL library queue to
+ * 				pull user input (mouse and keyboard) and user interface events
+ * 				pushed by the server_listen thread.
+ *
+ ******************************************************************************/
 int game_loop(int fd)
 {
 	SDL_Event 	event;
@@ -375,9 +435,28 @@ int game_loop(int fd)
 			}
 		}
 	}
-
 }
 
+/******************************************************************************
+ * server_setup()
+ *
+ * Arguments:
+ *			int  * - pointer to socket file ID (empty). To be filed by this 
+ * 					 function.
+ * 			char * - server IP address.
+ * 			char * - server port number.
+ * Returns:
+ *			int    -  Returns 0 on sucess and -1 if an error occured.
+ * Side-Effects:
+ *
+ * Description: This function is responsable for establishing a connection with
+ * 				the server and receive all setup information from the board.
+ * 				This function will fail eitheir if the connections timesout,
+ * 				the connection is shutdown on the server side, the messages
+ * 				received don't follow the protocol or if any message is lost 
+ * 				during the exchange. 
+ *
+ ******************************************************************************/
 
 int server_setup(int * rfd, char* server_ip, char* server_port)
 {
@@ -548,9 +627,22 @@ int server_setup(int * rfd, char* server_ip, char* server_port)
 				sleep(10);
 		}
 	}
-
 }
 
+/******************************************************************************
+ * server_setup()
+ *
+ * Arguments:
+ *			int    - socket file ID.
+ * Returns:
+ *			void  
+ * Side-Effects:
+ *
+ * Description: This function is responsable for shuting down connection with
+ * 				the server. It will notify the server, close the socket and 
+ * 				close the SDL window.
+ *
+ ******************************************************************************/
 
 void server_disconnect(int fd)
 {

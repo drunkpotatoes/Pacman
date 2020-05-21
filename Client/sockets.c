@@ -1,3 +1,17 @@
+/******************************************************************************
+ *
+ * File Name: sockets.c
+ *
+ * Authors:   Grupo 24:
+ *            Inês Guedes 87202 
+ *            Manuel Domingues 84126
+ *
+ * DESCRIPTION
+ *      *     Implementation of the functions necessary to establish socket
+ *            comunication of type sock stream.
+ *
+ *****************************************************************************/
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +37,7 @@
  *			 fd - socket file ID
  * Side-Effects:
  *
- * Description: Establishes a connection with a TCP server.
+ * Description: Establishes a connection with a sock stream server.
  *
  ******************************************************************************/
 
@@ -79,7 +93,7 @@ int client_connect(struct addrinfo **res, char *ip, char* port)
  *			 fd - socket file ID
  * Side-Effects:
  *
- * Description: Opens TCP server.
+ * Description: Opens a socket stream server.
  *
  ******************************************************************************/
 

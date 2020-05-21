@@ -1,4 +1,14 @@
-
+/******************************************************************************
+ *
+ * File Name: UI_library.c
+ *
+ * Authors:   PSIS Team
+ *
+ * DESCRIPTION
+ *      *     Implementation of the functions that interact with the SDL
+ * 		      user interface.
+ *
+ *****************************************************************************/
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
