@@ -893,15 +893,11 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 	setsockopt(fd,SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
 
-	/* locks clients to read only*/
-	pthread_rwlock_rdlock(&lock_clients);
 
 	get_pac_rgb(clients_head,(unsigned long)pthread_self(),&pac_rgb[0],&pac_rgb[1] ,&pac_rgb[2]);
 
 	get_mon_rgb(clients_head,(unsigned long)pthread_self(),&mon_rgb[0],&mon_rgb[1], &mon_rgb[2]);
 
-	/*unlocks*/
-	pthread_rwlock_unlock(&lock_clients);
 
 
 	/* gets current time*/
@@ -1238,12 +1234,6 @@ void server_disconnect()
 
 	close_board_windows();
 
-	for (i =0; i < status.col ; i++) 	pthread_mutex_lock(&lock_col[i]);
-	free_board(status.row, status.board);
-	status.board = NULL;
-	for (i =0; i < status.col; i++) 	pthread_mutex_unlock(&lock_col[i]);
-
-
 	pthread_rwlock_rdlock(&lock_clients);
 	
 	/* if number of clients is zero all threads have finished*/
@@ -1269,6 +1259,9 @@ void server_disconnect()
 
 	/* frees head */
 	free(clients_head);
+	
+	
+	free_board(status.row, status.board);
 	
 
 	for(i = 0; i < status.col ; i++)
