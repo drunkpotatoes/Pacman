@@ -77,8 +77,6 @@ pthread_mutex_t   lock_cur;				/* locks board_info.cur_fruits field */
 
 pthread_rwlock_t  lock_clients;			/* locks access to client list in a read/write fashion */
 
-pthread_mutex_t   lock_success; 		/* locks conditional variable shutdown success */
-
 
 /* flag containing shutdown succes from all client threads */
 volatile int shut_down_success; 		
@@ -152,10 +150,7 @@ int main(int argc, char** argv)
 		if (pthread_mutex_init(&lock_col[i],NULL) != 0)								{func_err("pthread_mutex_init"); exit(1);}
 
 	/* initializes lock for number of curr fruits*/
-	if(pthread_mutex_init(&lock_cur,NULL) != 0)										{func_err("pthread_mutex_init"); exit(1);}	
-
-	/* initializes lock for shutdown success*/
-	if(pthread_mutex_init(&lock_success,NULL) != 0)									{func_err("pthread_mutex_init"); exit(1);}					
+	if(pthread_mutex_init(&lock_cur,NULL) != 0)										{func_err("pthread_mutex_init"); exit(1);}						
 
 	/* creates thread to accept clients*/
 	if (pthread_create(&accept_thread_id , NULL, accept_thread, (void*) &fid)) 		{func_err("pthread_create"); exit(1);}
@@ -624,7 +619,7 @@ void * client_thread (void* arg)
 
 	/*removes client from list*/
 	pthread_rwlock_wrlock(&lock_clients);
-	pthread_mutex_lock(&lock_success);
+
 
 	remove_client(&clients_head,(unsigned long)pthread_self());
 
@@ -632,7 +627,7 @@ void * client_thread (void* arg)
 	{	
 		shut_down_success = 1;
 	}
-	pthread_mutex_unlock(&lock_success);
+
 	pthread_rwlock_unlock(&lock_clients);
 	
 
@@ -1242,14 +1237,7 @@ void server_disconnect()
 
 		while (1)
 		{
-			pthread_mutex_lock(&lock_success);
-
-			if (shut_down_success == 1)
-			{
-				pthread_mutex_unlock(&lock_success);
-				break;
-			}
-			pthread_mutex_unlock(&lock_success);
+			if (shut_down_success == 1)		break;
 
 			/* sleeps a bit after checking again */
 			usleep(500);
