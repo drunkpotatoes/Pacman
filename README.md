@@ -41,6 +41,8 @@ The game loop consists of the server telling the clients eitheir to clear or to 
     Server: PT PIECE @ Y:X [R,G,B] # USER_ID
 
     Server: CL Y:X
+    
+    Server: SC <Message>
 
     Client: MV PIECE @ PREV-Y:PREV-X => Y:X
 
