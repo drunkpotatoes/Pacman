@@ -79,7 +79,9 @@ pthread_rwlock_t  lock_clients;			/* locks access to client list in a read/write
 
 pthread_mutex_t   lock_success; 		/* locks conditional variable shutdown success */
 
-pthread_cond_t    shut_down_success; 	/* signals shutdown succes from all client threads */
+
+/* flag containing shutdown succes from all client threads */
+volatile int shut_down_success; 		
 
 /* debug flag */
 volatile int debug;
@@ -117,6 +119,7 @@ int main(int argc, char** argv)
 	sigaction(SIGINT, &action_int, NULL);
 
 	shut_down = 0;
+	shut_down_success = 0;
 	debug = 0;
 	clients_head = NULL;
 	status = init_board();
@@ -154,9 +157,6 @@ int main(int argc, char** argv)
 	/* initializes lock for shutdown success*/
 	if(pthread_mutex_init(&lock_success,NULL) != 0)									{func_err("pthread_mutex_init"); exit(1);}					
 
-	/* initializes shutdown_sucess */
-	if(pthread_cond_init(&shut_down_success,NULL) !=0)								{func_err("pthread_cond_init"); exit(1);}
-	
 	/* creates thread to accept clients*/
 	if (pthread_create(&accept_thread_id , NULL, accept_thread, (void*) &fid)) 		{func_err("pthread_create"); exit(1);}
 	if (pthread_detach(accept_thread_id))											{func_err("pthread_detach"); exit(1);}
@@ -373,11 +373,11 @@ void * fruity_thread (void* arg)
 
 			if(lemon)
 			{
-				place_randoom_position(status.board, status.row, status.col,LEMON, rgb, ff_fd);
+				place_random_position(status.board, status.row, status.col,LEMON, rgb, ff_fd);
 			}
 			else
 			{
-				place_randoom_position(status.board, status.row, status.col,CHERRY, rgb, ff_fd);
+				place_random_position(status.board, status.row, status.col,CHERRY, rgb, ff_fd);
 			}
 
 			pthread_mutex_lock(&lock_cur);
@@ -630,7 +630,7 @@ void * client_thread (void* arg)
 
 	if (number_of_clients(clients_head) == 0)
 	{	
-		pthread_cond_broadcast(&shut_down_success);
+		shut_down_success = 1;
 	}
 	pthread_mutex_unlock(&lock_success);
 	pthread_rwlock_unlock(&lock_clients);
@@ -774,10 +774,10 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 
 	/* checks if client's rgb is correct */
 	if ((rgb_verf(pac_rgb[0], pac_rgb[1], pac_rgb[2]) == -1) || (rgb_verf(mon_rgb[0], mon_rgb[1], mon_rgb[2]) == -1)) return -1;
-	/*places pacman and monster in randoom positions*/
+	/*places pacman and monster in random positions*/
 
-	place_randoom_position(status.board, status.row, status.col, PACMAN,  pac_rgb, *pff_fd);
-	place_randoom_position(status.board, status.row, status.col, MONSTER,  mon_rgb, *pff_fd);
+	place_random_position(status.board, status.row, status.col, PACMAN,  pac_rgb, *pff_fd);
+	place_random_position(status.board, status.row, status.col, MONSTER,  mon_rgb, *pff_fd);
 
 
 	/* places the fruits for a not first client*/
@@ -893,12 +893,9 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 	setsockopt(fd,SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
 
-
 	get_pac_rgb(clients_head,(unsigned long)pthread_self(),&pac_rgb[0],&pac_rgb[1] ,&pac_rgb[2]);
 
 	get_mon_rgb(clients_head,(unsigned long)pthread_self(),&mon_rgb[0],&mon_rgb[1], &mon_rgb[2]);
-
-
 
 	/* gets current time*/
 	gettimeofday(&start,NULL);
@@ -952,8 +949,8 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 					buffer[n] = '\0';
 					write_play_to_main(buffer,ff_fd);
 
-					place_randoom_position(status.board, status.row, status.col, PACMAN,  pac_rgb, ff_fd);
-					place_randoom_position(status.board, status.row, status.col, MONSTER,  mon_rgb, ff_fd);
+					place_random_position(status.board, status.row, status.col, PACMAN,  pac_rgb, ff_fd);
+					place_random_position(status.board, status.row, status.col, MONSTER,  mon_rgb, ff_fd);
 				}
 				/*updates clock*/
 				gettimeofday(&start,NULL);
@@ -979,7 +976,8 @@ int client_loop(int fd, int ff_fd, int ft_fd)
 			if ( sscanf(buffer, "%*s %d @ %d:%d => %d:%d", &piece, &prev_x, &prev_y, &x,&y) != 5) 					{inv_format(buffer); continue;}
 
 			/* out of boundaries*/
-			if ( (x > status.row) || (y > status.col) || x < -1 || y < -1 )											continue;
+			if ( (x > status.row) || (y > status.col) || x < -1 || y < -1 
+			|| prev_x >= status.row || prev_y >= status.col || prev_x < 0 || prev_y < 0 )							continue;
 
 			/* big move*/
 			if ((abs(prev_x-x) + abs(prev_y-y)) != 1 )																continue;			
@@ -1181,11 +1179,11 @@ int write_fruit(int ft_fd, int fd, int now)
 
 			if(lemon)
 			{
-				place_randoom_position(status.board, status.row, status.col,LEMON, rgb, fd);
+				place_random_position(status.board, status.row, status.col,LEMON, rgb, fd);
 			}
 			else
 			{
-				place_randoom_position(status.board, status.row, status.col,CHERRY, rgb, fd);
+				place_random_position(status.board, status.row, status.col,CHERRY, rgb, fd);
 			}
 		}
 	
@@ -1229,8 +1227,8 @@ int write_fruit(int ft_fd, int fd, int now)
  ******************************************************************************/
 void server_disconnect()
 {
-	int 	i;
 
+	int i;
 
 	close_board_windows();
 
@@ -1239,16 +1237,23 @@ void server_disconnect()
 	/* if number of clients is zero all threads have finished*/
 	if (number_of_clients(clients_head) != 0)
 	{	
-		/* if not waits on success to be updated by the last
-		thread to execute*/
+
 		pthread_rwlock_unlock(&lock_clients);
 
-		pthread_mutex_lock(&lock_success);
+		while (1)
+		{
+			pthread_mutex_lock(&lock_success);
 
-		pthread_cond_wait(&shut_down_success,&lock_success);
+			if (shut_down_success == 1)
+			{
+				pthread_mutex_unlock(&lock_success);
+				break;
+			}
+			pthread_mutex_unlock(&lock_success);
 
-		pthread_mutex_unlock(&lock_success);
-
+			/* sleeps a bit after checking again */
+			usleep(500);
+		}
 	}
 	else
 	{
@@ -1259,11 +1264,11 @@ void server_disconnect()
 
 	/* frees head */
 	free(clients_head);
-	
-	
+
+	/* frees board */
 	free_board(status.row, status.board);
 	
-
+	/* destroys mutexes */
 	for(i = 0; i < status.col ; i++)
 		if (pthread_mutex_destroy(&lock_col[i])) 			func_err("pthread_mutex_destroy");
 	
@@ -1341,7 +1346,7 @@ int pacman_movement(board_piece** board,int row, int col, int x, int y, int prev
 	 * result that is independent from possible memory updates. Given the
 	 * character trades also have to lock the prev position to garantee
 	 * a safe swap. In regards to the eating mechanic a trylock aproach is used
-	 * when finding the new randoom position, to avoid possible deadlocks*/
+	 * when finding the new random position, to avoid possible deadlocks*/
 
 	if(prev_x==x && prev_y == y) 		return 0;
 
@@ -1597,7 +1602,7 @@ int power_pacman_movement(board_piece** board,int row, int col, int x, int y, in
 	 * result that is independent from possible memory updates. Given the
 	 * character trades also have to lock the prev position to garantee
 	 * a safe swap. In regards to the eating mechanic a trylock aproach is used
-	 * when finding the new randoom position, to avoid possible deadlocks*/
+	 * when finding the new random position, to avoid possible deadlocks*/
 
 	if(prev_x==x && prev_y == y) 		return 0;
 
@@ -1863,7 +1868,7 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 	 * result that is independent from possible memory updates. Given the
 	 * character clear and trades also have to lock the prev position to garantee
 	 * a safe swap. In regards to the eating mechanic a trylock aproach is used
-	 * when finding the new randoom position, to avoid possible deadlocks*/
+	 * when finding the new random position, to avoid possible deadlocks*/
 
 
 	if(prev_x==x && prev_y==y)		return 0;
@@ -1984,7 +1989,12 @@ int monster_movement(board_piece** board, int row, int col, int x, int y, int pr
 			if(is_pacman(x,y,board))		/* normal pacman */
 				player_eats_player(board, row, col, x, y, prev_x, prev_y, 0, ff_fd);
 			else							/* power pacman */
-			{	
+			{	if (decrement_counter(board,x,y) == 0)
+				{
+					reverse_pacman(board,x,y);
+					
+				}
+
 				player_eats_player(board, row, col, x, y, prev_x, prev_y, 1, ff_fd);
 				id = get_id(board,x,y);
 			}
@@ -2165,7 +2175,7 @@ int bounce(board_piece** board, int row, int col,int x, int y, int prev_x, int p
 }
 
 /******************************************************************************
- * place_randoom_position() 
+ * place_random_position() 
  *
  * Arguments:
  *			board_piece** 	- pointer to the board struct.
@@ -2181,7 +2191,7 @@ int bounce(board_piece** board, int row, int col,int x, int y, int prev_x, int p
  * Description: Places the piece received in a new empty position. If there are
  * 				no empty positions, it leaves the piece where it is.
  ******************************************************************************/
-void place_randoom_position(board_piece** board, int row, int col, int piece, int* rgb, int ff_fd)
+void place_random_position(board_piece** board, int row, int col, int piece, int* rgb, int ff_fd)
 {
 	int 	new_row, new_col, n , last_col;
 	char 	buffer[BUFF_SIZE];
@@ -2190,7 +2200,7 @@ void place_randoom_position(board_piece** board, int row, int col, int piece, in
 	memset(buffer,' ',BUFF_SIZE*sizeof(char));
 	memset(buffer_aux,' ',BUFF_SIZE*sizeof(char));
 
-	/* gets a column at randoom*/
+	/* gets a column at random*/
 	srand(time(NULL));
 	new_col = rand()%col;
 	last_col = new_col;
@@ -2204,7 +2214,7 @@ void place_randoom_position(board_piece** board, int row, int col, int piece, in
 		/* tries to lock col*/
 		if (!pthread_mutex_trylock(&lock_col[new_col]))
 		{
-			/* tries to get a randoom row for n-rows attempts */
+			/* tries to get a random row for n-rows attempts */
 			/* getting the right row - if there is any - can be seen as a bernoulli distribution with p = 1/n */
 			/* therefore expected number of trials until sucess is ~ 1/p  = n */
 			/* if it doesn't find a empty row within the n attempts it tries a new col*/
@@ -2273,7 +2283,7 @@ void player_eats_player(board_piece** board, int row, int col, int x, int y, int
 	memset(buffer,' ',BUFF_SIZE*sizeof(char));
 	memset(buffer_aux,' ',BUFF_SIZE*sizeof(char));
 
-	/* gets a column at randoom*/
+	/* gets a column at random*/
 	srand(time(NULL));
 	new_col = rand()%col;
 	last_col = new_col;
@@ -2287,7 +2297,7 @@ void player_eats_player(board_piece** board, int row, int col, int x, int y, int
 		/* tries to lock col*/
 		if (!pthread_mutex_trylock(&lock_col[new_col]))
 		{
-			/* tries to get a randoom row for n-rows attempts */
+			/* tries to get a random row for n-rows attempts */
 			/* getting the right row - if there is any - can be seen as a bernoulli distribution with p = 1/n */
 			/* therefore expected number of trials until sucess is ~ 1/p  = n */
 			/* if it doesn't find a empty row within the n attempts it tries a new col*/
