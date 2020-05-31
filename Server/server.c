@@ -802,6 +802,8 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 	pthread_rwlock_unlock(&lock_clients);
 
 	/*sends all piece information to the client*/
+
+	for (n = 0; n < status.col ; n++) 			pthread_mutex_lock(&lock_col[n]);
 	
 	for (i = 0; i < status.row; i++)
 	{
@@ -819,6 +821,7 @@ int client_setup(int fd, int* pff_fd, int* pft_fd)
 		}
 	}
 
+	for (n = 0; n < status.col ; n++) 			pthread_mutex_unlock(&lock_col[n]);
 
 	/* sends summary of sent data */
 	n = sprintf(buffer, "SS %d\n", num_pieces);
@@ -1267,7 +1270,6 @@ void server_disconnect()
 	if (pthread_mutex_destroy(&lock_empty)) 				func_err("pthread_mutex_destroy");
 	if (pthread_mutex_destroy(&lock_fruits)) 				func_err("pthread_mutex_destroy");
 	if (pthread_mutex_destroy(&lock_cur)) 					func_err("pthread_mutex_destroy");
-	if (pthread_mutex_destroy(&lock_success))				func_err("pthread_mutex_destroy");
 
 }
 
